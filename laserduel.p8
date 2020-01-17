@@ -1,10 +1,11 @@
 pico-8 cartridge // http://www.pico-8.com
 version 18
 __lua__
---ufos
+--laser duel
 --by oc_ram
 
 function _init()
+	cls()
 	ufos = {}
 	setup_ufos(ufos)
 	spawn_ufo(32,32,ufos)
@@ -38,7 +39,7 @@ function setup_ufos(ufos)
 	ufos.attributes=attributes
 end
 
-function spawn_ufo(pos_x,pos_y,ufos)
+function spawn_ufo(x,y,ufos)
 	local ufo={}
 	--register
 	ufo.index=#ufos
@@ -46,58 +47,48 @@ function spawn_ufo(pos_x,pos_y,ufos)
 	--attributes
 	ufo.attributes=ufos.attributes
 	--position
-	ufo.pos_x=pos_x
-	ufo.pos_y=pos_y
+	ufo.pos=make_vec2(x,y)
 	--velocity
-	ufo.vel_x=0
-	ufo.vel_y=0
+	ufo.vel=make_vec2(0,0)
 end
 -->8
 --ufo sim
 
 function thrust(ufo,angle)
-	local acc=ufo.attributes.acc
-	ufo.vel_x+=cos(angle)*acc
-	ufo.vel_y+=sin(angle)*acc
+	local acc_vec=make_vec2(cos(angle),sin(angle))
+	acc_vec:scale(ufo.attributes.acc)
+	ufo.vel+=acc_vec
 end
 
 function integrate(ufo)
-	local drag=ufo.attributes.drag
-	ufo.vel_x*=drag
-	ufo.vel_y*=drag
-	ufo.pos_x+=ufo.vel_x
-	ufo.pos_y+=ufo.vel_y
+	ufo.vel:scale(ufo.attributes.drag)
+	ufo.pos+=ufo.vel
 end
 
 function screen_bounce(ufo)
 	local r=ufo.attributes.radius
-	local gap = ufo.pos_x-r
-	if (gap<0) ufo.pos_x-=gap ufo.vel_x*=-1	
-	gap = ufo.pos_x+r - 128
-	if (gap>0) ufo.pos_x-=gap ufo.vel_x*=-1
-	gap = ufo.pos_y-r
-	if (gap<0) ufo.pos_y-=gap ufo.vel_y*=-1	
-	gap = ufo.pos_y+r - 128
-	if (gap>0) ufo.pos_y-=gap ufo.vel_y*=-1
+	local gap=ufo.pos.x-r
+	if (gap<0) ufo.pos.x-=gap ufo.vel.x*=-1
+	gap=ufo.pos.x+r-128
+	if (gap>0) ufo.pos.x-=gap ufo.vel.x*=-1
+	gap = ufo.pos.y-r
+	if (gap<0) ufo.pos.y-=gap ufo.vel.y*=-1
+	gap = ufo.pos.y+r-128
+	if (gap>0) ufo.pos.y-=gap ufo.vel.y*=-1
 end
 
 function collide_ufos(u_1,u_2)
-	local dx=u_2.pos_x-u_1.pos_x
-	local dy=u_2.pos_y-u_1.pos_y
-	local dist_sq=(dx*dx)+(dy*dy)
+	local dp=u_2.pos-u_1.pos
+	local dist_sq=dp:dot(dp)
 	local tresh=u_1.attributes.radius+u_2.attributes.radius
 	if dist_sq > (tresh*tresh) then
 		return
 	end
 	local dist=sqrt(dist_sq)
 	local normalizer=0.5*(dist-tresh)/dist
- --todo: need to compute actual gap, this is just a test
-	dx*=normalizer
-	dy*=normalizer
-	u_1.pos_x+=dx
-	u_1.pos_y+=dy
-	u_2.pos_x-=dx
-	u_2.pos_y-=dy
+	dp:scale(normalizer)
+	u_1.pos+=dp
+	u_2.pos-=dp
 end
 
 function update_ufo(ufo)
@@ -128,7 +119,35 @@ end
 
 function draw_ufo(ufo)
 	local r=ufo.attributes.radius-0.5
-	spr(1,ufo.pos_x-r,ufo.pos_y-r)
+	spr(1,ufo.pos.x-r,ufo.pos.y-r)
+end
+-->8
+--math
+--vec2 metatable
+_vec2_mt={
+	__add=function(a,b)
+				return make_vec2(a.x+b.x,a.y+b.y)
+			end,
+	__sub=function(a,b)
+			return make_vec2(a.x-b.x,a.y-b.y)
+		end
+}
+--api table
+_vec2_api={
+	dot=function(a,b)
+				return a.x*b.x+a.y*b.y
+			end,
+	scale=function(a,s)
+				a.x*=s
+				a.y*=s
+			end
+}
+--factory
+_vec2_mt.__index=_vec2_api
+function make_vec2(x,y)
+	local v={x=x,y=y}
+	setmetatable(v,_vec2_mt)
+	return v
 end
 __gfx__
 00000000004440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
