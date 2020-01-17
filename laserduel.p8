@@ -33,8 +33,8 @@ end
 function setup_ufos(ufos)
 --constants
  local attributes = {}
-	attributes.acc=0.015
-	attributes.drag=0.975
+	attributes.acc=0.0175
+	attributes.drag=0.98
 	attributes.radius=3
 	ufos.attributes=attributes
 end
