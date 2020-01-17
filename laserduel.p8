@@ -85,10 +85,14 @@ function collide_ufos(u_1,u_2)
 		return
 	end
 	local dist=sqrt(dist_sq)
-	local normalizer=0.5*(dist-tresh)/dist
-	dp:scale(normalizer)
-	u_1.pos+=dp
-	u_2.pos-=dp
+	dp:scale(1/dist)
+	local pt=dp:scaled(0.5*(dist-tresh))
+	u_1.pos+=pt
+	u_2.pos-=pt
+	local dv=u_2.vel-u_1.vel
+	local vt=dp:scaled(dv:dot(dp))
+	u_1.vel+=vt
+	u_2.vel-=vt
 end
 
 function update_ufo(ufo)
@@ -140,6 +144,9 @@ _vec2_api={
 	scale=function(a,s)
 				a.x*=s
 				a.y*=s
+			end,
+	scaled=function(a,s)
+				return make_vec2(a.x*s,a.y*s)
 			end
 }
 --factory
