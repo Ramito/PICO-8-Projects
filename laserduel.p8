@@ -23,12 +23,13 @@ function _update60()
  end
 --lasers
 	foreach(lasers,update_laser)
+	foreach(lasers,update_laser_hit)
 end
 
 function _draw()
  cls(1)
- foreach(ufos,draw_ufo)
  foreach(lasers,draw_laser)
+ foreach(ufos,draw_ufo)
 end
 
 -->8
@@ -136,8 +137,8 @@ end
 --vec2 metatable
 _vec2_mt={
 	__add=function(a,b)
-				return make_vec2(a.x+b.x,a.y+b.y)
-			end,
+			return make_vec2(a.x+b.x,a.y+b.y)
+		end,
 	__sub=function(a,b)
 			return make_vec2(a.x-b.x,a.y-b.y)
 		end
@@ -145,22 +146,30 @@ _vec2_mt={
 --api table
 _vec2_api={
 	dot=function(a,b)
-				return a.x*b.x+a.y*b.y
-			end,
+			return a.x*b.x+a.y*b.y
+		end,
 	scale=function(a,s)
-				a.x*=s
-				a.y*=s
-			end,
+			a.x*=s
+			a.y*=s
+		end,
 	scaled=function(a,s)
-				return make_vec2(a.x*s,a.y*s)
-			end
+			return make_vec2(a.x*s,a.y*s)
+		end,
+	ort=function(a)
+			return make_vec2(a.y,-a.x)
+		end
 }
 --factory
 _vec2_mt.__index=_vec2_api
+
 function make_vec2(x,y)
 	local v={x=x,y=y}
 	setmetatable(v,_vec2_mt)
 	return v
+end
+
+function arg_vec2(arg)
+	return make_vec2(cos(arg),sin(arg))
 end
 -->8
 --laser
@@ -168,24 +177,73 @@ end
 function make_laser(ufo)
 	local laser={
 		aim=0,
-		fire=false,
+		trigger=false,
 		index=ufo.index
 	}
 	add(lasers,laser)
 end
 
 function update_laser(laser)
-	laser.aim+=0.01
-	laser.fire=btn(❎,laser.index-1)
+	local rs=0.0025
+ local index=laser.index-1
+ local ❎=btn(❎,index)
+ local 🅾️=btn(🅾️,index)
+ if (❎) laser.aim-=rs
+ if (🅾️) laser.aim+=rs
+	if (laser.trigger) then
+		laser.trigger=❎ or 🅾️
+	else
+		laser.trigger=❎ and 🅾️
+	end
+end
+
+function compute_hit(laser,ufo)
+	if (ufo.index==laser.index) return nil
+	local ld=arg_vec2(laser.aim)
+	local lp=ufos[laser.index].pos
+	local tocenter=ufo.pos-lp
+	local dist=ld:dot(tocenter)
+	if (dist<0) return nil
+	local h=abs(ld:ort():dot(tocenter))
+	local r = ufo.attributes.radius
+	if (h>r) return nil
+	local w=sqrt(r*r-h*h)
+	local hit_dist=dist-w
+	local hit_point=lp+ld:scaled(hit_dist)
+	local hit_normal=hit_point-ufo.pos
+	local hit={
+			distance=hit_dist,
+			point=hit_point,
+			normal=hit_normal
+		}
+	return hit
+end
+
+function update_laser_hit(laser)
+	laser.hit=nil
+	for ufo in all(ufos) do
+		local hit=compute_hit(laser,ufo)
+		if (hit!=nil) then
+			if (not laser.hit or laser.hit.distance > hit.distance) then
+				laser.hit=hit
+			end
+		end
+	end
 end
 
 function draw_laser(laser)
- if (not laser.fire) return
+	local col=2
+	if (laser.trigger) col=8
 	local origin=ufos[laser.index].pos
-	local direction=make_vec2(cos(laser.aim),sin(laser.aim))
-	local dest=origin+direction:scaled(100)
-	line(origin.x,origin.y,dest.x,dest.y,8)
-end
+	if (laser.hit) then
+	 local hit_p=laser.hit.point
+		line(origin.x,origin.y,hit_p.x,hit_p.y,col)
+		return
+	end
+	local direction=arg_vec2(laser.aim)
+	local dest=origin+direction:scaled(200)
+	line(origin.x,origin.y,dest.x,dest.y,col)
+	end
 __gfx__
 0000000000ddd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000d666d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
