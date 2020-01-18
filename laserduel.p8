@@ -9,6 +9,7 @@ function _init()
 	ufos={}
 	lasers={}
 	setup_ufos()
+	setup_lasers()
 	spawn_ufo(32,32)
 	spawn_ufo(96,96)
 end
@@ -175,22 +176,45 @@ end
 -->8
 --laser
 
+function setup_lasers()
+--constants
+ local attrs = {}
+ attrs.aim_acc=0.0001
+ attrs.aim_drag=0.99925
+ attrs.aim_brake=0.9
+	lasers.attrs=attrs
+end
+
 function make_laser(ufo)
 	local laser={
 		aim=0,
+		aim_speed=0,
 		trigger=false,
-		index=ufo.index
+		index=ufo.index,
+		attrs=lasers.attrs
 	}
 	add(lasers,laser)
 end
 
 function update_laser(laser)
-	local rs=0.0025
+	local attrs=lasers.attrs
+	local la=attrs.aim_acc
  local index=laser.index-1
  local ❎=btn(❎,index)
  local 🅾️=btn(🅾️,index)
- if (❎) laser.aim-=rs
- if (🅾️) laser.aim+=rs
+ local speed=laser.aim_speed
+ acc=0
+ if (❎) acc-=la
+ if (🅾️) acc+=la
+ local drag=attrs.aim_brake
+ if acc~=0 and acc*speed>=0 then
+ 	drag=attrs.aim_drag
+ end
+ speed+=acc
+ speed*=drag
+ if (speed == laser.aim_speed) speed=0
+ laser.aim_speed=speed
+ laser.aim+=speed
 	if (laser.trigger) then
 		laser.trigger=❎ or 🅾️
 	else
