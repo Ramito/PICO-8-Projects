@@ -11,6 +11,8 @@ function _init()
 	setup_ufos()
 	setup_lasers()
 	spawn_ufo(32,32)
+	spawn_ufo(96,32)
+	spawn_ufo(32,96)
 	spawn_ufo(96,96)
 end
 
@@ -28,13 +30,26 @@ function _update60()
 end
 
 function _draw()
- cls(1)
+ cls(0)
  foreach(lasers,draw_laser)
  foreach(ufos,draw_ufo)
 end
 
 -->8
 --ufo factory
+
+palettes={}
+palettes[1]={}
+palettes[2]={{8,9},{2,4},{14,10}}
+palettes[3]={{8,12},{2,1},{14,7}}
+palettes[4]={{8,11},{2,3},{14,10}}
+
+function apply_pal(indx)
+ pal()
+	for v in all(palettes[indx]) do
+			pal(v[1],v[2])
+	end
+end
 
 function setup_ufos()
 --constants
@@ -131,6 +146,7 @@ end
 --ufo render
 
 function draw_ufo(ufo)
+	apply_pal(ufo.index)
 	local r=ufo.attributes.radius
 	spr(1,ufo.pos.x-r,ufo.pos.y-r)
 end
@@ -257,6 +273,7 @@ function update_laser_hit(laser)
 end
 
 function draw_laser(laser)
+	apply_pal(laser.index)
 	local origin=ufos[laser.index].pos
 	local dest
 	if (laser.hit) then
@@ -269,19 +286,21 @@ function draw_laser(laser)
 		circfill(dest.x,dest.y,2,8)
 	else
 		local o_d=origin-dest
-		local max_pts=0.15*sqrt(o_d:dot(o_d))
-			local points=0.5*(rnd(max_pts)+rnd(max_pts))
+		local max_pts=0.175*sqrt(o_d:dot(o_d))
+		local points=rnd(max_pts)
 		for i=1,points do
 			local alpha=rnd(1)
+			local c=2
+			if (rnd(1)<0.025) c=8
 			local point=origin:scaled(alpha)+dest:scaled(1-alpha)
-		 pset(point.x,point.y,2)
+		 pset(point.x,point.y,c)
 		end
 	end
 end
 __gfx__
 0000000000ddd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000d666d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700d68896d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700d688e6d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00077000d68886d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00077000d68886d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 007007000d666d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
