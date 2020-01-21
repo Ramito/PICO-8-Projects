@@ -56,7 +56,7 @@ function setup_ufos()
  local attributes = {}
 	attributes.acc=0.0175
 	attributes.drag=-0.0225
-	attributes.radius=1.5
+	attributes.radius=2
 	ufos.attributes=attributes
 end
 
@@ -288,12 +288,12 @@ function draw_laser(laser)
 		circfill(dest.x,dest.y,2,8)
 	else
 		local o_d=origin-dest
-		local max_pts=0.175*sqrt(o_d:dot(o_d))
+		local max_pts=0.174*sqrt(o_d:dot(o_d))
 		local points=rnd(max_pts)
 		for i=1,points do
 			local alpha=rnd(1)
 			local c=2
-			if (rnd(1)<0.025) c=8
+			if (rnd(1)<0.04) c=8
 			local point=origin:scaled(alpha)+dest:scaled(1-alpha)
 		 pset(point.x,point.y,c)
 		end
