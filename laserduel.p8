@@ -55,7 +55,7 @@ function setup_ufos()
 --constants
  local attributes = {}
 	attributes.acc=0.0175
-	attributes.drag=0.98
+	attributes.drag=-0.0225
 	attributes.radius=1.5
 	ufos.attributes=attributes
 end
@@ -84,7 +84,9 @@ function thrust(ufo,angle)
 end
 
 function integrate(ufo)
-	ufo.vel:scale(ufo.attributes.drag)
+	local sq_vel=ufo.vel:dot(ufo.vel)
+	ufo.vel+=ufo.vel:scaled(sqrt(sq_vel)*ufo.attributes.drag)
+	--ufo.vel:scale(ufo.attributes.drag)
 	ufo.pos+=ufo.vel
 end
 
