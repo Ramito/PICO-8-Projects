@@ -111,6 +111,11 @@ function get_radius(o)
 	return o.attributes.radius
 end
 
+function get_mass(o)
+	local r=get_radius(o)
+	return r*r*r
+end
+
 function collide(u_1,u_2)
 	local dp=u_2.pos-u_1.pos
 	local dist_sq=dp:dot(dp)
@@ -126,9 +131,15 @@ function collide(u_1,u_2)
 	local dv=u_2.vel-u_1.vel
 	local	vel_p=dv:dot(dp)
 	if (vel_p>=0) return
-	local vt=dp:scaled(vel_p)
-	u_1.vel+=vt
-	u_2.vel-=vt
+	local vp=dp:scaled(vel_p)
+	local m1=get_mass(u_1)
+	local m2=get_mass(u_2)
+	local tm=m1+m2
+	m1/=tm
+	m2=1-m1
+	local vc=u_1.vel:scaled(m1)+u_2.vel:scaled(m2)
+	u_1.vel=vc+vp:scaled(m2)
+	u_2.vel=vc-vp:scaled(m1)
 	sfx(1)
 end
 
@@ -365,7 +376,7 @@ function create_asteroid(x,y)
 end
 
 function spawn_asteroids()
-	for i=1,8 do
+	for i=1,9 do
 		local x=rnd(128)
 		local y=rnd(128)
 		create_asteroid(x,y)
