@@ -21,12 +21,10 @@ end
 function _update60()
 --ufos and collisions
  foreach(ufos,update_ufo)
- for i=1,#ufos do
- 	for j=i+1,#ufos do
- 		collide_ufos(ufos[i], ufos[j])
- 	end
- end
- foreach(all_asteroids,update_asteroid)
+ collide_collections(ufos,ufos)
+ collide_collections(asteroids,asteroids)
+ collide_collections(asteroids,ufos)
+ foreach(asteroids,update_asteroid)
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
@@ -34,7 +32,7 @@ end
 
 function _draw()
  cls(0)
- foreach(all_asteroids,draw_asteroid)
+ foreach(asteroids,draw_asteroid)
  foreach(lasers,draw_laser)
  foreach(ufos,draw_ufo)
  rect(0,0,127,127,1)
@@ -94,20 +92,41 @@ function screen_bounce(ufo)
 	if (gap>0) ufo.pos.y-=gap ufo.vel.y*=-1
 end
 
-function collide_ufos(u_1,u_2)
+
+function collide_collections(col1,col2)
+	for i=1,#col1 do
+		if (col1==col2) then
+			for j=i+1,#col1 do
+				collide(col1[i],col1[j])
+			end
+		else
+			for j=1,#col2 do
+				collide(col1[i],col2[j])
+			end
+		end
+	end
+end
+
+function get_radius(o)
+	return o.attributes.radius
+end
+
+function collide(u_1,u_2)
 	local dp=u_2.pos-u_1.pos
 	local dist_sq=dp:dot(dp)
-	local tresh=u_1.attributes.radius+u_2.attributes.radius
-	if dist_sq > (tresh*tresh) then
-		return
-	end
+	local r1=get_radius(u_1)
+	local r2=get_radius(u_2)
+	local tresh=r1+r2
+	if (dist_sq>(tresh*tresh))	return
 	local dist=sqrt(dist_sq)
 	dp:scale(1/dist)
 	local pt=dp:scaled(0.5*(dist-tresh))
 	u_1.pos+=pt
 	u_2.pos-=pt
 	local dv=u_2.vel-u_1.vel
-	local vt=dp:scaled(dv:dot(dp))
+	local	vel_p=dv:dot(dp)
+	if (vel_p>=0) return
+	local vt=dp:scaled(vel_p)
 	u_1.vel+=vt
 	u_2.vel-=vt
 	sfx(1)
@@ -183,6 +202,27 @@ end
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
 end
+
+function vec2_rect_dist_sq(vec2,r_min,r_max)
+	local gap=vec2-vec2_rect_closest(vec2,r_min,r_max)
+	return gap:dot(gap)
+end
+
+function vec2_rect_closest(vec2,r_min,r_max)
+	local x=vec2.x
+	if x<r_min.x then
+	 x=r_min.x
+	elseif x>r_max.x then
+	 x=r_max.x
+	end
+	local y=vec2.y
+	if y<r_min.y then
+	 y=r_min.y
+	elseif y>r_max.y then
+	 y=r_max.y
+	end
+	return make_vec2(x,y)
+end
 -->8
 --laser
 
@@ -233,17 +273,17 @@ function update_laser(laser)
 end
 
 function compute_hit(laser,ufo)
-	if (ufo.index==laser.index) return nil
 	local ld=arg_vec2(laser.aim)
 	local lp=ufos[laser.index].pos
 	local tocenter=ufo.pos-lp
 	local dist=ld:dot(tocenter)
-	if (dist<0) return nil
+	if (dist<0) return
 	local h=abs(ld:ort():dot(tocenter))
 	local r = ufo.attributes.radius
-	if (h>r) return nil
+	if (h>r) return
 	local w=sqrt(r*r-h*h)
 	local hit_dist=dist-w
+	if (laser.hit and (laser.hit.distance<hit_dist)) return
 	local hit_point=lp+ld:scaled(hit_dist)
 	local hit_normal=hit_point-ufo.pos
 	local hit={
@@ -251,18 +291,18 @@ function compute_hit(laser,ufo)
 			point=hit_point,
 			normal=hit_normal
 		}
-	return hit
+	laser.hit=hit
 end
 
 function update_laser_hit(laser)
 	laser.hit=nil
-	for ufo in all(ufos) do
-		local hit=compute_hit(laser,ufo)
-		if (hit!=nil) then
-			if (not laser.hit or laser.hit.distance > hit.distance) then
-				laser.hit=hit
-			end
+	for i=1,#ufos do
+		if i!=laser.index then
+			compute_hit(laser,ufos[i])
 		end
+	end
+	for i=1,#asteroids do
+		compute_hit(laser,asteroids[i])
 	end
 end
 
@@ -295,7 +335,7 @@ end
 --asteroid
 
 ast_prot_map={}
-all_asteroids={}
+asteroids={}
 
 function register_ast(rad,spr_ind,spr_w)
 	local asteroid={}
@@ -320,12 +360,12 @@ function create_asteroid(x,y)
 	ast.pos=pos
 	ast.vel=arg_vec2(rnd(1)):scaled(0.08)
 	local prot_ind=flr(rnd(#ast_prot_map))+1
-	ast.attrs=ast_prot_map[prot_ind]
-	add(all_asteroids,ast)
+	ast.attributes=ast_prot_map[prot_ind]
+	add(asteroids,ast)
 end
 
 function spawn_asteroids()
-	for i=1,30 do
+	for i=1,8 do
 		local x=rnd(128)
 		local y=rnd(128)
 		create_asteroid(x,y)
@@ -334,10 +374,18 @@ end
 
 function update_asteroid(ast)
 	ast.pos+=ast.vel
+	local screen_dist_sq=vec2_rect_dist_sq(ast.pos,make_vec2(0,0),make_vec2(128,128))
+	local r_sq=ast.attributes.radius*ast.attributes.radius
+	if (screen_dist_sq>r_sq) then
+		ast.pos.x+=128
+		ast.pos.y+=128
+		ast.pos.x%=128
+		ast.pos.y%=128
+	end
 end
 
 function draw_asteroid(ast)
- local attrs=ast.attrs
+ local attrs=ast.attributes
 	spr(attrs.sprite
 	,ast.pos.x-attrs.radius
 	,ast.pos.y-attrs.radius
@@ -508,4 +556,5 @@ __label__
 
 __sfx__
 010100000f5701157013570175601d5502253025520285202a5202d52031510355103652000000000000000000000015000150000500015000450006500005000050000500005000050000500005000050000500
-0014000002660016200061001600006001d6001d6001a60018600126000c6000b6000c6000c6000d600106001160014600126000f6000f6000f6000f6000f6000f6000f6000f6000f6000f6000f6000f60011600
+0019000000740007000070000700007001d7001d7001a70018700127000c7000b7000c7000c7000d700107001170014700127000f7000f7000f7000f7000f7000f7000f7000f7000f7000f7000f7000f70011700
+001400000331005300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
