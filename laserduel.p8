@@ -25,6 +25,7 @@ function _update60()
  collide_collections(asteroids,asteroids)
  collide_collections(asteroids,ufos)
  foreach(asteroids,update_asteroid)
+	if (time()%0.25==0 and rnd(1)<0.15) spawn_random_ast()
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
@@ -117,11 +118,14 @@ function get_mass(o)
 end
 
 function collide(u_1,u_2)
-	local dp=u_2.pos-u_1.pos
-	local dist_sq=dp:dot(dp)
 	local r1=get_radius(u_1)
 	local r2=get_radius(u_2)
+	local bb1=circ_bb(u_1.pos,r1)
+	local bb2=circ_bb(u_2.pos,r2)
+	if (not bb1:overlaps_rect(bb2)) return
+	local dp=u_2.pos-u_1.pos
 	local tresh=r1+r2
+	local dist_sq=dp:dot(dp)
 	if (dist_sq>(tresh*tresh))	return
 	local dist=sqrt(dist_sq)
 	dp:scale(1/dist)
@@ -176,16 +180,23 @@ function draw_ufo(ufo)
 end
 -->8
 --math
---vec2 metatable
+--vec2
+--vec2--metatable
 _vec2_mt={
-	__add=function(a,b)
+	__add=
+		function(a,b)
 			return make_vec2(a.x+b.x,a.y+b.y)
 		end,
-	__sub=function(a,b)
+	__sub=
+		function(a,b)
 			return make_vec2(a.x-b.x,a.y-b.y)
+		end,
+	__eq=
+		function(a,b)
+			return a.x==b.x and a.y==b.y
 		end
 }
---api table
+--vec2--api table
 _vec2_api={
 	dot=function(a,b)
 			return a.x*b.x+a.y*b.y
@@ -201,39 +212,77 @@ _vec2_api={
 			return make_vec2(a.y,-a.x)
 		end
 }
---factory
 _vec2_mt.__index=_vec2_api
-
+--vec2--factory
 function make_vec2(x,y)
 	local v={x=x,y=y}
 	setmetatable(v,_vec2_mt)
 	return v
 end
-
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
 end
-
-function vec2_rect_dist_sq(vec2,r_min,r_max)
-	local gap=vec2-vec2_rect_closest(vec2,r_min,r_max)
-	return gap:dot(gap)
+--rect
+--rect--metatable
+_rect_mt={
+	__add=
+		function(a,b)
+			local min=a.min+b.min
+			local max=a.max+b.max
+			return make_rect(min,max)
+		end,
+	__sub=
+		function(a,b)
+			local min=a.min-b.max
+			local max=a.max-b.min
+			return make_rect(min,max)
+		end
+}
+--rect--api table
+_rect_api={
+	closest_to=
+		function(rec,vec2)
+			local min=rec.min
+			local max=rec.max
+			local x=clamp(vec2.x,min.x,max.x)
+			local y=clamp(vec2.y,min.y,max.y)
+			return make_vec2(x,y)
+		end,
+	vec2_dist_sq=
+		function(rec,vec2)
+		 local closest=rec:closest_to(vec2)
+		 local gap=closest-vec2
+		 return gap:dot(gap)
+		end,
+	overlaps_rect=
+		function(a,b)
+			local diff=a-b
+			local zero=make_vec2(0,0)
+			local shortest=diff:closest_to(zero)
+			return shortest==zero
+		end
+}
+_rect_mt.__index=_rect_api
+--rect--factory
+function make_rect(min_v2,max_v2)
+	local rec={min=min_v2,max=max_v2}
+	setmetatable(rec,_rect_mt)
+	return rec
+end
+function circ_bb(center,radius)
+	local offset=make_vec2(radius,radius)
+	return make_rect(center-offset,center+offset)
 end
 
-function vec2_rect_closest(vec2,r_min,r_max)
-	local x=vec2.x
-	if x<r_min.x then
-	 x=r_min.x
-	elseif x>r_max.x then
-	 x=r_max.x
-	end
-	local y=vec2.y
-	if y<r_min.y then
-	 y=r_min.y
-	elseif y>r_max.y then
-	 y=r_max.y
-	end
-	return make_vec2(x,y)
+--general math
+function clamp(val,min,max)
+	if (val<min) return min
+	if (val>max) return max
+	return val
 end
+
+
+local screen_rect=make_rect(make_vec2(0,0),make_vec2(128,128))
 -->8
 --laser
 
@@ -373,6 +422,7 @@ function create_asteroid(x,y)
 	local prot_ind=flr(rnd(#ast_prot_map))+1
 	ast.attributes=ast_prot_map[prot_ind]
 	add(asteroids,ast)
+	return ast
 end
 
 function spawn_asteroids()
@@ -383,15 +433,34 @@ function spawn_asteroids()
 	end
 end
 
+function spawn_random_ast()
+	local loc=rnd(1)
+	local pos
+	local axis
+	if (loc<0.25) then
+		pos=make_vec2(132,4*128*loc)
+		axis=0.5
+	elseif (loc<0.5) then
+		pos=make_vec2(4*128*(loc-0.25),-4)
+		axis=0.75
+	elseif (loc<0.75) then
+		pos=make_vec2(-4,4*128*(loc-0.5))
+		axis=0
+	else
+		pos=make_vec2(4*128*(loc-0.75),132)
+		axis=0.25
+	end
+	axis+=(rnd(0.5)-0.25)
+	local vel=arg_vec2(axis):scaled(0.02+rnd(0.25))
+	create_asteroid(pos.x,pos.y).vel=vel
+end
+
 function update_asteroid(ast)
 	ast.pos+=ast.vel
-	local screen_dist_sq=vec2_rect_dist_sq(ast.pos,make_vec2(0,0),make_vec2(128,128))
+	local screen_dist_sq=screen_rect:vec2_dist_sq(ast.pos)
 	local r_sq=ast.attributes.radius*ast.attributes.radius
-	if (screen_dist_sq>r_sq) then
-		ast.pos.x+=128
-		ast.pos.y+=128
-		ast.pos.x%=128
-		ast.pos.y%=128
+	if (screen_dist_sq>4*r_sq) then
+		del(asteroids,ast)
 	end
 end
 
