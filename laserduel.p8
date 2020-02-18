@@ -21,11 +21,14 @@ end
 function _update60()
 --ufos and collisions
  foreach(ufos,update_ufo)
- collide_collections(ufos,ufos)
- collide_collections(asteroids,asteroids)
- collide_collections(asteroids,ufos)
  foreach(asteroids,update_asteroid)
-	if (time()%0.25==0 and rnd(1)<0.25) spawn_random_ast()
+	--timer_start=stat(1)
+	clear_hash()
+	hash_colliders(ufos)
+	hash_colliders(asteroids)
+	resolve_hash_collisions()
+ --print("collisions:"..stat(1)-timer_start)
+	if (time()%0.25==0 and rnd(1)<0.3333) spawn_random_ast()
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
@@ -93,21 +96,6 @@ function screen_bounce(ufo)
 	if (gap>0) ufo.pos.y-=gap ufo.vel.y*=-1
 end
 
-
-function collide_collections(col1,col2)
-	for i=1,#col1 do
-		if (col1==col2) then
-			for j=i+1,#col1 do
-				collide(col1[i],col1[j])
-			end
-		else
-			for j=1,#col2 do
-				collide(col1[i],col2[j])
-			end
-		end
-	end
-end
-
 function get_radius(o)
 	return o.attributes.radius
 end
@@ -120,9 +108,6 @@ end
 function collide(u_1,u_2)
 	local r1=get_radius(u_1)
 	local r2=get_radius(u_2)
-	local bb1=circ_bb(u_1.pos,r1)
-	local bb2=circ_bb(u_2.pos,r2)
-	if (not bb1:overlaps_rect(bb2)) return
 	local dp=u_2.pos-u_1.pos
 	local tresh=r1+r2
 	local dist_sq=dp:dot(dp)
@@ -169,6 +154,70 @@ function update_ufo(ufo)
 	end
 	integrate(ufo)
 	screen_bounce(ufo)
+end
+
+all_col={}
+sp_hash={}
+
+local grid_offset=12
+local grid_cells_side=8
+
+function coord_to_grid(coord)
+	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
+end
+
+function grid_coords(vec2)
+	local ix=coord_to_grid(vec2.x)
+	local iy=coord_to_grid(vec2.y)
+	return flr(ix),flr(iy)
+end
+
+function hash_cell(ix,iy)
+	return ix+grid_cells_side*iy 
+end
+
+function hash_colliders(colliders)
+	for i=1,#colliders do
+		local collider=colliders[i]
+		add(all_col,collider)
+		local r=get_radius(collider)
+		local offset=make_vec2(r,r)
+		local minp=collider.pos-offset
+		local maxp=collider.pos+offset
+		local iminx,iminy=grid_coords(minp)
+		local imaxx,imaxy=grid_coords(maxp)
+		for ix=iminx,imaxx do
+			for iy=iminy,imaxy do
+				local cellid=hash_cell(ix,iy)
+				cell=sp_hash[cellid] or {}
+				add(cell,#all_col)
+				sp_hash[cellid]=cell
+			end
+		end
+	end
+end
+
+function clear_hash()
+	all_col={}
+	sp_hash={}
+end
+
+function resolve_hash_collisions()
+	local checked={}
+	for id,cell in pairs(sp_hash) do
+		for i=1,#cell-1 do
+			local ci=cell[i]
+			local check=checked[ci] or {}
+			for j=i+1,#cell do
+				local cj=cell[j]
+				if not check[cj] then
+					check[cj]=true
+					collide(all_col[ci],all_col[cj])
+				end
+			end
+			checked[i]=check
+		end
+	end
 end
 -->8
 --ufo render
