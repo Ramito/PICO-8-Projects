@@ -16,6 +16,15 @@ function _init()
 	spawn_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
+	
+	for i=1,400 do
+		local pos=make_vec2(64,64)
+		local vel=arg_vec2(rnd(2))
+		vel:scale(rnd(1.75))
+		local col=8
+		local life=120+rnd(300)
+		make_particle(pos,vel,col,life)
+	end
 end
 
 function _update60()
@@ -32,6 +41,8 @@ function _update60()
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
+	update_particles()
+	foreach(particles,collide_particle)
 end
 
 function _draw()
@@ -39,6 +50,8 @@ function _draw()
  foreach(asteroids,draw_asteroid)
  foreach(lasers,draw_laser)
  foreach(ufos,draw_ufo)
+ pal()
+ foreach(particles,draw_particle)
  rect(0,0,127,127,1)
 end
 
@@ -80,7 +93,6 @@ end
 function integrate(ufo)
 	local sq_vel=ufo.vel:dot(ufo.vel)
 	ufo.vel+=ufo.vel:scaled(sqrt(sq_vel)*ufo.attributes.drag)
-	--ufo.vel:scale(ufo.attributes.drag)
 	ufo.pos+=ufo.vel
 end
 
@@ -270,6 +282,9 @@ function make_vec2(x,y)
 end
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
+end
+function cpy_vec2(v)
+	return make_vec2(v.x,v.y)
 end
 --rect
 --rect--metatable
@@ -527,7 +542,7 @@ function draw_asteroid(ast)
 	,attrs.sprite_w)
 end
 -->8
---palette
+--palette & particles
 
 palettes={}
 palettes[1]={}
@@ -540,6 +555,55 @@ function apply_pal(indx)
 	for v in all(palettes[indx]) do
 			pal(v[1],v[2])
 	end
+end
+
+particles={}
+
+function make_particle(pos,vel,col,life)
+	local part={}
+	part.pos=cpy_vec2(pos)
+	part.vel=cpy_vec2(vel)
+	part.col=col
+	part.life=life
+	add(particles,part)
+end
+
+function update_particles()
+	for i,part in pairs(particles) do
+		part.pos+=part.vel
+		part.life-=1
+		if part.life<=0 then
+			del(particles,part)
+		end
+	end
+end
+
+function part_vs_col(part,col)
+		local radius=get_radius(col)
+		local dp=col.pos-part.pos
+		distsq = dp:dot(dp)
+		if (distsq> radius*radius) return	
+		dp:scale(1/sqrt(distsq))
+		local dv=col.vel-part.vel
+		local vel_p=dp:dot(dv)
+		if (vel_p>=0) return
+		local vp=dp:scaled(vel_p)
+		part.vel=col.vel+vp
+end
+
+function collide_particle(part)
+	local ix,iy=grid_coords(part.pos)
+	local cellid=hash_cell(ix,iy)
+	local colliders=sp_hash[cellid]
+	if (not colliders) return
+	for k,i in pairs(colliders) do
+		local col=all_col[i]
+		part_vs_col(part,col)
+	end
+end
+
+function draw_particle(part)
+	pset(part.pos.x,part.pos.y,part.col)
 end
 __gfx__
 000000000660000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
