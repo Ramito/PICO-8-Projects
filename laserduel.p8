@@ -16,15 +16,6 @@ function _init()
 	spawn_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
-	
-	for i=1,400 do
-		local pos=make_vec2(64,64)
-		local vel=arg_vec2(rnd(2))
-		vel:scale(rnd(1.75))
-		local col=8
-		local life=120+rnd(300)
-		make_particle(pos,vel,col,life)
-	end
 end
 
 function _update60()
@@ -271,7 +262,11 @@ _vec2_api={
 		end,
 	ort=function(a)
 			return make_vec2(a.y,-a.x)
-		end
+		end,
+	normalized=function(a)
+		local norm=sqrt(a:dot(a))
+		return a:scaled(1/norm)
+	end
 }
 _vec2_mt.__index=_vec2_api
 --vec2--factory
@@ -413,7 +408,7 @@ function compute_hit(laser,ufo)
 	local hit={
 			distance=hit_dist,
 			point=hit_point,
-			normal=hit_normal
+			normal=hit_normal:normalized()
 		}
 	laser.hit=hit
 end
@@ -430,12 +425,25 @@ function update_laser_hit(laser)
 	end
 end
 
+function spawn_hit_particles(hit,index)
+	 local part_count=rnd(3)
+	 local c=8
+	 if (rnd(1)<0.2) c=2
+	 for i=1,part_count do
+	 	local vel=hit.normal:scaled(0.6+rnd(0.5))
+	 	local offset=arg_vec2(rnd(2))
+	 	offset:scale(rnd(0.25))
+	 	make_particle(hit.point,vel+offset,index,c,rnd(240))
+	 end
+end
+
 function draw_laser(laser)
 	apply_pal(laser.index)
 	local origin=ufos[laser.index].pos
 	local dest
 	if (laser.hit) then
 	 dest=laser.hit.point
+	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
 	else
 		dest=origin+arg_vec2(laser.aim):scaled(180)
 	end
@@ -559,11 +567,12 @@ end
 
 particles={}
 
-function make_particle(pos,vel,col,life)
+function make_particle(pos,vel,palette,col,life)
 	local part={}
 	part.pos=cpy_vec2(pos)
 	part.vel=cpy_vec2(vel)
 	part.col=col
+	part.palette=palette
 	part.life=life
 	add(particles,part)
 end
@@ -571,6 +580,7 @@ end
 function update_particles()
 	for i,part in pairs(particles) do
 		part.pos+=part.vel
+		part.vel:scale(0.991)
 		part.life-=1
 		if part.life<=0 then
 			del(particles,part)
@@ -603,6 +613,7 @@ function collide_particle(part)
 end
 
 function draw_particle(part)
+	apply_pal(part.palette)
 	pset(part.pos.x,part.pos.y,part.col)
 end
 __gfx__
