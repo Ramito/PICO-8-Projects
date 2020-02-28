@@ -7,24 +7,25 @@ __lua__
 function _init()
 	cls()
 	ufos={}
+	live_ufos={}
 	lasers={}
 	setup_ufos()
 	setup_lasers()
-	spawn_ufo(32,32,-0.2)
-	spawn_ufo(96,32,0.7)
-	spawn_ufo(32,96,0.2)
-	spawn_ufo(96,96,-0.7)
+	create_ufo(32,32,-0.2)
+	create_ufo(96,32,0.7)
+	create_ufo(32,96,0.2)
+	create_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
 end
 
 function _update60()
 --ufos and collisions
- foreach(ufos,update_ufo)
+ foreach(live_ufos,update_ufo)
  foreach(asteroids,update_asteroid)
 	--timer_start=stat(1)
 	clear_hash()
-	hash_colliders(ufos)
+	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
  --print("collisions:"..stat(1)-timer_start)
@@ -40,7 +41,7 @@ function _draw()
  cls(0)
  foreach(asteroids,draw_asteroid)
  foreach(lasers,draw_laser)
- foreach(ufos,draw_ufo)
+ foreach(live_ufos,draw_ufo)
  pal()
  foreach(particles,draw_particle)
  rect(0,0,127,127,1)
@@ -58,7 +59,7 @@ function setup_ufos()
 	ufos.attributes=attributes
 end
 
-function spawn_ufo(x,y,aim)
+function create_ufo(x,y,aim)
 	local ufo={}
 	--register
 	add(ufos,ufo)
@@ -69,11 +70,27 @@ function spawn_ufo(x,y,aim)
 	ufo.pos=make_vec2(x,y)
 	--velocity
 	ufo.vel=make_vec2(0,0)
-	--ufo laser
-	make_laser(ufo,aim)
+	--hit callback
+	ufo.on_hit=on_ufo_hit
+	--spawn in world
+	spawn_ufo(ufo.index,aim)
+end
+
+function spawn_ufo(index,aim)
+	make_laser(index,aim)
+	add(live_ufos,ufos[index])
+end
+
+function despawn_ufo(index)
+	destroy_laser(index)
+	del(live_ufos,ufos[index])
 end
 -->8
 --ufo sim
+
+function on_ufo_hit(ufo,hit)
+	despawn_ufo(ufo.index)
+end
 
 function thrust(ufo,angle)
 	local acc_vec=make_vec2(cos(angle),sin(angle))
@@ -354,15 +371,21 @@ function setup_lasers()
 	lasers.attrs=attrs
 end
 
-function make_laser(ufo,aim)
+function make_laser(index,aim)
 	local laser={
 		aim=aim,
 		aim_speed=0,
 		trigger=false,
-		index=ufo.index,
+		index=index,
 		attrs=lasers.attrs
 	}
 	add(lasers,laser)
+end
+
+function destroy_laser(index)
+ for i,laser in pairs(lasers) do
+ 	if (laser.index==index) del(lasers,laser) return
+ end
 end
 
 function update_laser(laser)
@@ -408,21 +431,28 @@ function compute_hit(laser,ufo)
 	local hit={
 			distance=hit_dist,
 			point=hit_point,
-			normal=hit_normal:normalized()
+			normal=hit_normal:normalized(),
+			hit_object=ufo
 		}
 	laser.hit=hit
 end
 
 function update_laser_hit(laser)
 	laser.hit=nil
-	for i=1,#ufos do
-		if i!=laser.index then
-			compute_hit(laser,ufos[i])
+	for k,ufo in pairs(live_ufos) do
+		if ufo.index!=laser.index then
+			compute_hit(laser,ufo)
 		end
 	end
 	for i=1,#asteroids do
 		compute_hit(laser,asteroids[i])
 	end
+	if (not laser.trigger) return
+	local hit=laser.hit
+	if (not hit) return
+	local hit_object=hit.hit_object
+	if (not hit_object or not hit_object.on_hit) return
+	hit_object:on_hit(hit)
 end
 
 function spawn_hit_particles(hit,index)
@@ -430,10 +460,10 @@ function spawn_hit_particles(hit,index)
 	 local c=8
 	 if (rnd(1)<0.2) c=2
 	 for i=1,part_count do
-	 	local vel=hit.normal:scaled(0.6+rnd(0.5))
+	 	local vel=hit.normal:scaled(0.55+rnd(0.45))
 	 	local offset=arg_vec2(rnd(2))
-	 	offset:scale(rnd(0.25))
-	 	make_particle(hit.point,vel+offset,index,c,rnd(240))
+	 	offset:scale(rnd(0.2))
+	 	make_particle(hit.point,vel+offset,index,c,20+rnd(280))
 	 end
 end
 
@@ -580,7 +610,7 @@ end
 function update_particles()
 	for i,part in pairs(particles) do
 		part.pos+=part.vel
-		part.vel:scale(0.991)
+		part.vel:scale(0.99)
 		part.life-=1
 		if part.life<=0 then
 			del(particles,part)
