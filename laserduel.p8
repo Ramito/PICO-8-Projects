@@ -89,7 +89,15 @@ end
 --ufo sim
 
 function on_ufo_hit(ufo,hit)
+	local kill_prob=0.1*hit.hit_angle*hit.hit_angle
+	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
+end
+
+function on_asteroid_hit(ast,hit)
+	local kill_prob=0.06*hit.hit_angle*hit.hit_angle
+	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
+	del(asteroids,ast)
 end
 
 function thrust(ufo,angle)
@@ -428,11 +436,14 @@ function compute_hit(laser,ufo)
 	if (laser.hit and (laser.hit.distance<hit_dist)) return
 	local hit_point=lp+ld:scaled(hit_dist)
 	local hit_normal=hit_point-ufo.pos
+	
+	local normal=hit_normal:normalized()
 	local hit={
 			distance=hit_dist,
 			point=hit_point,
-			normal=hit_normal:normalized(),
-			hit_object=ufo
+			normal=normal,
+			hit_object=ufo,
+			hit_angle=-normal:dot(ld)
 		}
 	laser.hit=hit
 end
@@ -528,6 +539,7 @@ function create_asteroid(x,y)
 	ast.vel=arg_vec2(rnd(1)):scaled(0.08)
 	local prot_ind=flr(rnd(#ast_prot_map))+1
 	ast.attributes=ast_prot_map[prot_ind]
+	ast.on_hit=on_asteroid_hit
 	add(asteroids,ast)
 	return ast
 end
@@ -583,10 +595,10 @@ end
 --palette & particles
 
 palettes={}
-palettes[1]={}
+palettes[4]={}
 palettes[2]={{8,10},{2,9},{14,7}}
 palettes[3]={{8,12},{2,1},{14,7}}
-palettes[4]={{8,11},{2,3},{14,10}}
+palettes[1]={{8,11},{2,3},{14,10}}
 
 function apply_pal(indx)
  pal()
