@@ -37,6 +37,7 @@ function _update60()
 	foreach(lasers,update_laser_hit)
 	update_particles()
 	foreach(particles,collide_particle)
+	foreach(explosions,update_explosion)
 end
 
 function _draw()
@@ -46,6 +47,7 @@ function _draw()
  foreach(live_ufos,draw_ufo)
  pal()
  foreach(particles,draw_particle)
+ foreach(explosions,draw_explosion)
  rect(0,0,127,127,1)
 end
 
@@ -95,6 +97,7 @@ function on_ufo_hit(ufo,hit)
 	local kill_prob=0.1*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
+	make_exp(ufo.pos,0,24,0.225)
 	ufo_respawn_queue[ufo.index]=600
 end
 
@@ -264,12 +267,35 @@ function resolve_hash_collisions()
 	end
 end
 -->8
---ufo render
+--ufo render & explosions
 
 function draw_ufo(ufo)
 	apply_pal(ufo.index)
 	local r=ufo.attributes.radius
 	spr(1,ufo.pos.x-r,ufo.pos.y-r)
+end
+
+explosions={}
+
+function make_exp(pos,radius,max_radius,strength)
+	local expl={}
+	expl.pos=cpy_vec2(pos)
+	expl.radius=radius
+	expl.max_radius=max_radius
+	expl.strength=strength
+	add(explosions,expl)
+end
+
+function update_explosion(expl)
+	local growth=expl.strength*(expl.max_radius-expl.radius)
+	local radius=expl.radius
+	expl.radius=radius+growth
+	if (expl.radius-radius<0.1) del(explosions,expl)
+end
+
+function draw_explosion(exp)
+	local pos=exp.pos
+	circ(pos.x,pos.y,exp.radius,9)
 end
 -->8
 --math
