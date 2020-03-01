@@ -8,6 +8,7 @@ function _init()
 	cls()
 	ufos={}
 	live_ufos={}
+	ufo_respawn_queue={}
 	lasers={}
 	setup_ufos()
 	setup_lasers()
@@ -20,9 +21,10 @@ function _init()
 end
 
 function _update60()
+	update_ufo_spawn()
 --ufos and collisions
- foreach(live_ufos,update_ufo)
- foreach(asteroids,update_asteroid)
+	foreach(live_ufos,update_ufo)
+	foreach(asteroids,update_asteroid)
 	--timer_start=stat(1)
 	clear_hash()
 	hash_colliders(live_ufos)
@@ -66,19 +68,20 @@ function create_ufo(x,y,aim)
 	ufo.index=#ufos
 	--attributes
 	ufo.attributes=ufos.attributes
-	--position
-	ufo.pos=make_vec2(x,y)
 	--velocity
 	ufo.vel=make_vec2(0,0)
 	--hit callback
 	ufo.on_hit=on_ufo_hit
+	--position is set on spawn!
 	--spawn in world
-	spawn_ufo(ufo.index,aim)
+	spawn_ufo(ufo.index,x,y,aim)
 end
 
-function spawn_ufo(index,aim)
+function spawn_ufo(index,x,y,aim)
+	local ufo=ufos[index]
+	ufo.pos=make_vec2(x,y)
 	make_laser(index,aim)
-	add(live_ufos,ufos[index])
+	add(live_ufos,ufo)
 end
 
 function despawn_ufo(index)
@@ -92,6 +95,7 @@ function on_ufo_hit(ufo,hit)
 	local kill_prob=0.1*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
+	ufo_respawn_queue[ufo.index]=600
 end
 
 function on_asteroid_hit(ast,hit)
@@ -182,6 +186,18 @@ function update_ufo(ufo)
 	end
 	integrate(ufo)
 	screen_bounce(ufo)
+end
+
+function update_ufo_spawn()
+	for k,count in pairs(ufo_respawn_queue) do
+		count-=1
+		if (count>0) then
+			ufo_respawn_queue[k]=(count-1)
+		else
+			ufo_respawn_queue[k]=nil
+			spawn_ufo(k,rnd(127), rnd(127),rnd(2))
+		end
+	end
 end
 
 all_col={}
