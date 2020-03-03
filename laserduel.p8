@@ -99,7 +99,7 @@ function on_ufo_hit(ufo,hit)
 	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
-	make_exp(ufo.pos,0,18,0.1)
+	make_exp(ufo.pos,0,36,0.05)
 	for i=1,125 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
