@@ -35,9 +35,11 @@ function _update60()
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
+	foreach(explosions,update_explosion)
+	hash_explosions()
 	update_particles()
 	foreach(particles,collide_particle)
-	foreach(explosions,update_explosion)
+	foreach(particles,particle_explosion_effects)
 end
 
 function _draw()
@@ -94,10 +96,17 @@ end
 --ufo sim
 
 function on_ufo_hit(ufo,hit)
-	local kill_prob=0.1*hit.hit_angle*hit.hit_angle
+	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
-	make_exp(ufo.pos,0,24,0.225)
+	make_exp(ufo.pos,0,18,0.1)
+	for i=1,125 do
+		local pos=arg_vec2(rnd(2))
+		pos:scale(rnd(get_radius(ufo)))
+		local vel=arg_vec2(rnd(2))
+		vel:scale(rnd(1))
+		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(600))
+	end
 	ufo_respawn_queue[ufo.index]=600
 end
 
@@ -132,7 +141,7 @@ function screen_bounce(ufo)
 end
 
 function get_radius(o)
-	return o.attributes.radius
+	return o.radius or o.attributes.radius
 end
 
 function get_mass(o)
@@ -203,11 +212,15 @@ function update_ufo_spawn()
 	end
 end
 
-all_col={}
-sp_hash={}
+col_hash_id={}
+col_sp_hash={}
+
+
+exp_hash_id={}
+exp_sp_hash={}
 
 local grid_offset=12
-local grid_cells_side=8
+local grid_cells_side=16
 
 function coord_to_grid(coord)
 	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
@@ -223,10 +236,10 @@ function hash_cell(ix,iy)
 	return ix+grid_cells_side*iy 
 end
 
-function hash_colliders(colliders)
-	for i=1,#colliders do
-		local collider=colliders[i]
-		add(all_col,collider)
+function hash_objects(objects, id_map, object_hash)
+	for i=1,#objects do
+		local collider=objects[i]
+		add(id_map,collider)
 		local r=get_radius(collider)
 		local offset=make_vec2(r,r)
 		local minp=collider.pos-offset
@@ -236,22 +249,32 @@ function hash_colliders(colliders)
 		for ix=iminx,imaxx do
 			for iy=iminy,imaxy do
 				local cellid=hash_cell(ix,iy)
-				cell=sp_hash[cellid] or {}
-				add(cell,#all_col)
-				sp_hash[cellid]=cell
+				cell=object_hash[cellid] or {}
+				add(cell,#id_map)
+				object_hash[cellid]=cell
 			end
 		end
 	end
 end
 
+function hash_colliders(colliders)
+	hash_objects(colliders,col_hash_id,col_sp_hash)
+end
+
+function hash_explosions()
+	hash_objects(explosions,exp_hash_id,exp_sp_hash)
+end
+
 function clear_hash()
-	all_col={}
-	sp_hash={}
+	col_hash_id={}
+	col_sp_hash={}
+	exp_hash_id={}
+	exp_sp_hash={}
 end
 
 function resolve_hash_collisions()
 	local checked={}
-	for id,cell in pairs(sp_hash) do
+	for id,cell in pairs(col_sp_hash) do
 		for i=1,#cell-1 do
 			local ci=cell[i]
 			local check=checked[ci] or {}
@@ -259,7 +282,7 @@ function resolve_hash_collisions()
 				local cj=cell[j]
 				if not check[cj] then
 					check[cj]=true
-					collide(all_col[ci],all_col[cj])
+					collide(col_hash_id[ci],col_hash_id[cj])
 				end
 			end
 			checked[i]=check
@@ -286,16 +309,22 @@ function make_exp(pos,radius,max_radius,strength)
 	add(explosions,expl)
 end
 
+function explode_strength(expl)
+	local mr=expl.max_radius
+	local r=expl.radius
+	return expl.strength*(mr-r)
+end
+
 function update_explosion(expl)
-	local growth=expl.strength*(expl.max_radius-expl.radius)
-	local radius=expl.radius
-	expl.radius=radius+growth
-	if (expl.radius-radius<0.1) del(explosions,expl)
+	local growth=explode_strength(expl)
+	local r=expl.radius
+	expl.radius+=growth
+	if (expl.radius-r<0.01) del(explosions,expl)
 end
 
 function draw_explosion(exp)
-	local pos=exp.pos
-	circ(pos.x,pos.y,exp.radius,9)
+	--local pos=exp.pos
+	--circ(pos.x,pos.y,exp.radius,9)
 end
 -->8
 --math
@@ -685,14 +714,37 @@ function part_vs_col(part,col)
 		part.vel=col.vel+vp
 end
 
+function part_vs_exp(part,exp)
+	local radius=exp.radius
+	local dp=part.pos-exp.pos
+	distsq = dp:dot(dp)
+	if (distsq>radius*radius) return		
+	local exp_vel=explode_strength(exp)
+	dp:scale(1/sqrt(distsq))
+	local vproj=dp:dot(part.vel)
+	if (exp_vel<vproj) return
+	part.vel+=dp:scaled(exp_vel-vproj)
+end
+
 function collide_particle(part)
 	local ix,iy=grid_coords(part.pos)
 	local cellid=hash_cell(ix,iy)
-	local colliders=sp_hash[cellid]
+	local colliders=col_sp_hash[cellid]
 	if (not colliders) return
 	for k,i in pairs(colliders) do
-		local col=all_col[i]
+		local col=col_hash_id[i]
 		part_vs_col(part,col)
+	end
+end
+
+function particle_explosion_effects(part)
+	local ix,iy=grid_coords(part.pos)
+	local cellid=hash_cell(ix,iy)
+	local expls=exp_sp_hash[cellid]
+	if (not expls) return
+	for k,i in pairs(expls) do
+		local exp=exp_hash_id[i]
+		part_vs_exp(part,exp)
 	end
 end
 
