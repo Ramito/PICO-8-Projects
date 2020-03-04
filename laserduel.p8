@@ -100,12 +100,12 @@ function on_ufo_hit(ufo,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	make_exp(ufo.pos,0,22.5,0.0125)
-	for i=1,100 do
+	for i=1,90 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		local vel=arg_vec2(rnd(2))
 		vel:scale(rnd(0.25))
-		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(500))
+		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(300))
 	end
 	ufo_respawn_queue[ufo.index]=600
 end
@@ -322,8 +322,8 @@ function update_explosion(expl)
 end
 
 function draw_explosion(exp)
-	--local pos=exp.pos
-	--circ(pos.x,pos.y,exp.radius,9)
+	local pos=exp.pos
+	circfill(pos.x,pos.y,0.33*exp.radius,10)
 end
 -->8
 --math
@@ -544,7 +544,7 @@ function spawn_hit_particles(hit,index)
 	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
 	 	local offset=arg_vec2(rnd(2))
 	 	offset:scale(rnd(0.2))
-	 	make_particle(hit.point,vel+offset,index,c,20+rnd(280))
+	 	make_particle(hit.point,vel+offset,index,c,rnd(300))
 	 end
 end
 
@@ -696,7 +696,9 @@ function update_particles()
 		part.life-=1
 		if part.life<=0 then
 			del(particles,part)
+			return
 		end
+		if (screen_rect:vec2_dist_sq(part.pos)>0) del(particles,part)
 	end
 end
 
