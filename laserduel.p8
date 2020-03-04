@@ -99,13 +99,13 @@ function on_ufo_hit(ufo,hit)
 	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
-	make_exp(ufo.pos,0,36,0.05)
-	for i=1,125 do
+	make_exp(ufo.pos,0,22.5,0.0125)
+	for i=1,100 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		local vel=arg_vec2(rnd(2))
-		vel:scale(rnd(1))
-		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(600))
+		vel:scale(rnd(0.25))
+		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(500))
 	end
 	ufo_respawn_queue[ufo.index]=600
 end
@@ -220,7 +220,7 @@ exp_hash_id={}
 exp_sp_hash={}
 
 local grid_offset=12
-local grid_cells_side=16
+local grid_cells_side=12
 
 function coord_to_grid(coord)
 	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
@@ -312,14 +312,13 @@ end
 function explode_strength(expl)
 	local mr=expl.max_radius
 	local r=expl.radius
-	return expl.strength*(mr-r)
+	return expl.strength*((mr*mr)-(r*r))
 end
 
 function update_explosion(expl)
 	local growth=explode_strength(expl)
-	local r=expl.radius
+	if (growth<=0.01) del(explosions,expl) return
 	expl.radius+=growth
-	if (expl.radius-r<0.01) del(explosions,expl)
 end
 
 function draw_explosion(exp)
@@ -538,11 +537,11 @@ function update_laser_hit(laser)
 end
 
 function spawn_hit_particles(hit,index)
-	 local part_count=rnd(3)
+	 local part_count=rnd(2)
 	 local c=8
 	 if (rnd(1)<0.2) c=2
 	 for i=1,part_count do
-	 	local vel=hit.normal:scaled(0.55+rnd(0.45))
+	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
 	 	local offset=arg_vec2(rnd(2))
 	 	offset:scale(rnd(0.2))
 	 	make_particle(hit.point,vel+offset,index,c,20+rnd(280))
@@ -693,7 +692,7 @@ end
 function update_particles()
 	for i,part in pairs(particles) do
 		part.pos+=part.vel
-		part.vel:scale(0.99)
+		part.vel:scale(0.97225)
 		part.life-=1
 		if part.life<=0 then
 			del(particles,part)
@@ -723,7 +722,7 @@ function part_vs_exp(part,exp)
 	dp:scale(1/sqrt(distsq))
 	local vproj=dp:dot(part.vel)
 	if (exp_vel<vproj) return
-	part.vel+=dp:scaled(exp_vel-vproj)
+	part.vel+=dp:scaled(0.11*(exp_vel-vproj))
 end
 
 function collide_particle(part)
