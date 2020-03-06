@@ -100,7 +100,7 @@ function on_ufo_hit(ufo,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	make_exp(ufo.pos,0,22.5,0.0125)
-	for i=1,100 do
+	for i=1,150 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		local vel=arg_vec2(rnd(2))
@@ -724,7 +724,7 @@ function part_vs_exp(part,exp)
 	dp:scale(1/sqrt(distsq))
 	local vproj=dp:dot(part.vel)
 	if (exp_vel<vproj) return
-	part.vel+=dp:scaled(0.11*(exp_vel-vproj))
+	part.vel+=dp:scaled(0.125*(exp_vel-vproj))
 end
 
 function collide_particle(part)
@@ -750,7 +750,7 @@ function particle_explosion_effects(part)
 end
 
 function draw_particle(part)
-	if (0.25<rnd(1)) return
+	if (0.2<rnd(1)) return
 	apply_pal(part.palette)
 	pset(part.pos.x,part.pos.y,part.col)
 end
