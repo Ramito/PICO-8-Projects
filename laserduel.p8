@@ -21,6 +21,7 @@ function _init()
 end
 
 function _update60()
+	s_start=stat(1)
 	update_ufo_spawn()
 --ufos and collisions
 	foreach(live_ufos,update_ufo)
@@ -40,17 +41,23 @@ function _update60()
 	update_particles()
 	foreach(particles,collide_particle)
 	foreach(particles,particle_explosion_effects)
+	s_end=stat(1)
 end
 
 function _draw()
+ r_start=stat(1)
  cls(0)
+ foreach(particles,draw_particle)
  foreach(asteroids,draw_asteroid)
  foreach(lasers,draw_laser)
  foreach(live_ufos,draw_ufo)
- pal()
- foreach(particles,draw_particle)
  foreach(explosions,draw_explosion)
  rect(0,0,127,127,1)
+ r_end=stat(1)
+ pal()
+ print("sim: "..flr(100*(s_end-s_start)).."%")
+ print("render: "..flr(100*(r_end-r_start)).."%")
+ print("total: "..flr(100*(s_end-s_start+r_end-r_start)).."%")
 end
 
 -->8
@@ -100,7 +107,7 @@ function on_ufo_hit(ufo,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	make_exp(ufo.pos,0,22.5,0.0125)
-	for i=1,150 do
+	for i=1,175 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		local vel=arg_vec2(rnd(2))
@@ -220,7 +227,7 @@ exp_hash_id={}
 exp_sp_hash={}
 
 local grid_offset=12
-local grid_cells_side=12
+local grid_cells_side=16
 
 function coord_to_grid(coord)
 	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
@@ -696,9 +703,7 @@ function update_particles()
 		part.life-=1
 		if part.life<=0 then
 			del(particles,part)
-			return
 		end
-		if (screen_rect:vec2_dist_sq(part.pos)>0) del(particles,part)
 	end
 end
 
@@ -750,9 +755,16 @@ function particle_explosion_effects(part)
 end
 
 function draw_particle(part)
-	if (0.2<rnd(1)) return
-	apply_pal(part.palette)
-	pset(part.pos.x,part.pos.y,part.col)
+	if (0.33<rnd(1)) return
+	local x=flr(part.pos.x+0.5)
+	if (x<0 or x>=128) return
+	local y=flr(part.pos.y+0.5)
+	if (y<0 or y>=128)return
+	local xdiv=flr(x/2)
+	local xmod=x%2
+	local addr=xdiv+(y*64)
+	local color=(1+15*xmod)*part.col
+	poke(0x6000+addr,color)
 end
 __gfx__
 000000000660000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
