@@ -26,12 +26,10 @@ function _update60()
 --ufos and collisions
 	foreach(live_ufos,update_ufo)
 	foreach(asteroids,update_asteroid)
-	--timer_start=stat(1)
 	clear_hash()
 	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
- --print("collisions:"..stat(1)-timer_start)
 	if (time()%0.25==0 and rnd(1)<0.3333) spawn_random_ast()
 --lasers
 	foreach(lasers,update_laser)
@@ -39,8 +37,7 @@ function _update60()
 	foreach(explosions,update_explosion)
 	hash_explosions()
 	update_particles()
-	foreach(particles,collide_particle)
-	foreach(particles,particle_explosion_effects)
+	foreach(particles,process_particle)
 	s_end=stat(1)
 end
 
@@ -55,9 +52,16 @@ function _draw()
  rect(0,0,127,127,1)
  r_end=stat(1)
  pal()
- print("sim: "..flr(100*(s_end-s_start)).."%")
- print("render: "..flr(100*(r_end-r_start)).."%")
- print("total: "..flr(100*(s_end-s_start+r_end-r_start)).."%")
+ local s=s_end-s_start
+ smax=max(s,smax)
+ local r=r_end-r_start
+ rmax=max(r,rmax)
+ print("sim: "..flr(100*s).."%")
+ print("ren: "..flr(100*r).."%")
+ print("tot: "..flr(100*(s+r)).."%")
+ print("exp max: "..flr(100*emax).."%")
+ print("sim max: "..flr(100*smax).."%")
+ print("ren max: "..flr(100*rmax).."%")
 end
 
 -->8
@@ -102,19 +106,24 @@ end
 -->8
 --ufo sim
 
+emax=0
+
 function on_ufo_hit(ufo,hit)
 	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
+	--note we pass ufo position. could cause issues if explosions moved
 	make_exp(ufo.pos,0,22.5,0.0125)
-	for i=1,175 do
+	local e_start=stat(1)
+	for i=1,200 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		local vel=arg_vec2(rnd(2))
 		vel:scale(rnd(0.25))
-		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(300))
+		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(500))
 	end
 	ufo_respawn_queue[ufo.index]=600
+	emax=max(stat(1)-e_start,e_max)
 end
 
 function on_asteroid_hit(ast,hit)
@@ -226,8 +235,8 @@ col_sp_hash={}
 exp_hash_id={}
 exp_sp_hash={}
 
-local grid_offset=12
-local grid_cells_side=16
+local grid_offset=8
+local grid_cells_side=12
 
 function coord_to_grid(coord)
 	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
@@ -309,7 +318,7 @@ explosions={}
 
 function make_exp(pos,radius,max_radius,strength)
 	local expl={}
-	expl.pos=cpy_vec2(pos)
+	expl.pos=pos
 	expl.radius=radius
 	expl.max_radius=max_radius
 	expl.strength=strength
@@ -379,9 +388,6 @@ function make_vec2(x,y)
 end
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
-end
-function cpy_vec2(v)
-	return make_vec2(v.x,v.y)
 end
 --rect
 --rect--metatable
@@ -688,8 +694,8 @@ particles={}
 
 function make_particle(pos,vel,palette,col,life)
 	local part={}
-	part.pos=cpy_vec2(pos)
-	part.vel=cpy_vec2(vel)
+	part.pos=pos
+	part.vel=vel
 	part.col=col
 	part.palette=palette
 	part.life=life
@@ -732,25 +738,22 @@ function part_vs_exp(part,exp)
 	part.vel+=dp:scaled(0.125*(exp_vel-vproj))
 end
 
-function collide_particle(part)
+function process_particle(part)
 	local ix,iy=grid_coords(part.pos)
 	local cellid=hash_cell(ix,iy)
 	local colliders=col_sp_hash[cellid]
-	if (not colliders) return
-	for k,i in pairs(colliders) do
-		local col=col_hash_id[i]
-		part_vs_col(part,col)
+	if colliders then
+		for k,i in pairs(colliders) do
+			local col=col_hash_id[i]
+			part_vs_col(part,col)
+		end
 	end
-end
-
-function particle_explosion_effects(part)
-	local ix,iy=grid_coords(part.pos)
-	local cellid=hash_cell(ix,iy)
 	local expls=exp_sp_hash[cellid]
-	if (not expls) return
-	for k,i in pairs(expls) do
-		local exp=exp_hash_id[i]
-		part_vs_exp(part,exp)
+	if expls then
+		for k,i in pairs(expls) do
+			local exp=exp_hash_id[i]
+			part_vs_exp(part,exp)
+		end
 	end
 end
 
