@@ -132,16 +132,22 @@ function on_asteroid_hit(ast,hit)
 	del(asteroids,ast)
 end
 
+local _vec2_cache={}
+function get_cached_vec2(index)
+	if (_vec2_cache[index]==nil) _vec2_cache[index]=make_vec2(0,0)
+	return _vec2_cache[index]
+end
+
 function thrust(ufo,angle)
-	local acc_vec=make_vec2(cos(angle),sin(angle))
-	acc_vec:scale(ufo.attributes.acc)
-	ufo.vel+=acc_vec
+	local thrust=get_cached_vec2(1)
+	thrust:set_arg(angle):scale(ufo.attributes.acc)
+	ufo.vel:add(thrust)
 end
 
 function integrate(ufo)
 	local sq_vel=ufo.vel:dot(ufo.vel)
-	ufo.vel+=ufo.vel:scaled(sqrt(sq_vel)*ufo.attributes.drag)
-	ufo.pos+=ufo.vel
+	ufo.vel:scale(1+sqrt(sq_vel)*ufo.attributes.drag)
+	ufo.pos:add(ufo.vel)
 end
 
 function screen_bounce(ufo)
@@ -168,27 +174,38 @@ end
 function collide(u_1,u_2)
 	local r1=get_radius(u_1)
 	local r2=get_radius(u_2)
-	local dp=u_2.pos-u_1.pos
 	local tresh=r1+r2
+	local dp=get_cached_vec2(1)
+	dp:set(u_2.pos):sub(u_1.pos)
 	local dist_sq=dp:dot(dp)
 	if (dist_sq>(tresh*tresh))	return
 	local dist=sqrt(dist_sq)
 	dp:scale(1/dist)
-	local pt=dp:scaled(0.5*(dist-tresh))
-	u_1.pos+=pt
-	u_2.pos-=pt
-	local dv=u_2.vel-u_1.vel
+	local pt=get_cached_vec2(2)
+	pt:set(dp):scale(0.5*(dist-tresh))
+	u_1.pos:add(pt)
+	u_2.pos:sub(pt)
+	local dv=pt--pt no longer used
+	dv:set(u_2.vel):sub(u_1.vel)
 	local	vel_p=dv:dot(dp)
 	if (vel_p>=0) return
-	local vp=dp:scaled(vel_p)
+	dp:scale(vel_p)--velocity projection vp
 	local m1=get_mass(u_1)
 	local m2=get_mass(u_2)
 	local tm=m1+m2
 	m1/=tm
 	m2=1-m1
-	local vc=u_1.vel:scaled(m1)+u_2.vel:scaled(m2)
-	u_1.vel=vc+vp:scaled(m2)
-	u_2.vel=vc-vp:scaled(m1)
+	local vc1=dv--dv no longer used
+	vc1:set(u_1.vel):scale(m1)
+	local vc2=get_cached_vec2(3)
+	vc2:set(u_2.vel):scale(m2)
+	vc1:add(vc2)
+	u_1.vel:set(vc1)
+	u_2.vel:set(vc1)
+	vc1:set(dp):scale(m2)
+	u_1.vel:add(vc1)
+	vc1:set(dp):scale(m1)
+	u_2.vel:sub(vc1)
 	sfx(1)
 end
 
@@ -256,12 +273,12 @@ function hash_objects(objects, id_map, object_hash)
 	for i=1,#objects do
 		local collider=objects[i]
 		add(id_map,collider)
+		local offset=get_cached_vec2(1)
 		local r=get_radius(collider)
-		local offset=make_vec2(r,r)
-		local minp=collider.pos-offset
-		local maxp=collider.pos+offset
-		local iminx,iminy=grid_coords(minp)
-		local imaxx,imaxy=grid_coords(maxp)
+		offset:set_coords(-r,-r):add(collider.pos)
+		local iminx,iminy=grid_coords(offset)
+		offset:set_coords(r,r):add(collider.pos)
+		local imaxx,imaxy=grid_coords(offset)
 		for ix=iminx,imaxx do
 			for iy=iminy,imaxy do
 				local cellid=hash_cell(ix,iy)
@@ -361,12 +378,41 @@ _vec2_mt={
 }
 --vec2--api table
 _vec2_api={
+	add=function(a,b)
+			a.x+=b.x
+			a.y+=b.y
+			return a
+		end,
+	sub=function(a,b)
+			a.x-=b.x
+			a.y-=b.y
+			return a
+		end,
+	set_coords=function(a,x,y)
+			a.x=x
+			a.y=y
+			return a
+		end,
+	set_arg=function(a,arg)
+			a.x=cos(arg)
+			a.y=sin(arg)
+			return a
+		end,
+	set=function(a,b)
+			a.x=b.x
+			a.y=b.y
+			return a
+		end,
+	copy=function(a)
+			return make_vec(a.x,a.y)
+		end,
 	dot=function(a,b)
 			return a.x*b.x+a.y*b.y
 		end,
 	scale=function(a,s)
 			a.x*=s
 			a.y*=s
+			return a
 		end,
 	scaled=function(a,s)
 			return make_vec2(a.x*s,a.y*s)
@@ -374,10 +420,15 @@ _vec2_api={
 	ort=function(a)
 			return make_vec2(a.y,-a.x)
 		end,
+	normalize=function(a)
+			local norm=sqrt(a:dot(a))
+			a:scale(1/norm)
+			return a
+		end,
 	normalized=function(a)
-		local norm=sqrt(a:dot(a))
-		return a:scaled(1/norm)
-	end
+			local norm=sqrt(a:dot(a))
+			return a:scaled(1/norm)
+		end
 }
 _vec2_mt.__index=_vec2_api
 --vec2--factory
@@ -418,8 +469,8 @@ _rect_api={
 	vec2_dist_sq=
 		function(rec,vec2)
 		 local closest=rec:closest_to(vec2)
-		 local gap=closest-vec2
-		 return gap:dot(gap)
+		 closest:sub(vec2) --gap
+		 return closest:dot(closest)
 		end,
 	overlaps_rect=
 		function(a,b)
@@ -658,7 +709,7 @@ function spawn_random_ast()
 end
 
 function update_asteroid(ast)
-	ast.pos+=ast.vel
+	ast.pos:add(ast.vel)
 	local screen_dist_sq=screen_rect:vec2_dist_sq(ast.pos)
 	local r_sq=ast.attributes.radius*ast.attributes.radius
 	if (screen_dist_sq>4*r_sq) then
@@ -704,7 +755,7 @@ end
 
 function update_particles()
 	for i,part in pairs(particles) do
-		part.pos+=part.vel
+		part.pos:add(part.vel)
 		part.vel:scale(0.97225)
 		part.life-=1
 		if part.life<=0 then
