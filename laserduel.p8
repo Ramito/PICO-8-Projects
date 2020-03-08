@@ -109,7 +109,7 @@ end
 emax=0
 
 function on_ufo_hit(ufo,hit)
-	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
+	local kill_prob=0.2*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
@@ -127,7 +127,7 @@ function on_ufo_hit(ufo,hit)
 end
 
 function on_asteroid_hit(ast,hit)
-	local kill_prob=0.06*hit.hit_angle*hit.hit_angle
+	local kill_prob=0.06*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	del(asteroids,ast)
 end
@@ -420,6 +420,9 @@ _vec2_api={
 	ort=function(a)
 			return make_vec2(a.y,-a.x)
 		end,
+	ort_dot=function(a,b)
+			return a.y*b.x-a.x*b.y
+		end,
 	normalize=function(a)
 			local norm=sqrt(a:dot(a))
 			a:scale(1/norm)
@@ -556,34 +559,42 @@ function update_laser(laser)
 	end
 end
 
-function compute_hit(laser,ufo)
-	local ld=arg_vec2(laser.aim)
+function compute_hit(laser,col)
+	local hit=laser.hit
+	local ld=get_cached_vec2(1)
+	ld:set_arg(laser.aim)
 	local lp=ufos[laser.index].pos
-	local tocenter=ufo.pos-lp
+	local tocenter=get_cached_vec2(2)
+	tocenter:set(col.pos):sub(lp)
 	local dist=ld:dot(tocenter)
 	if (dist<0) return
-	local h=abs(ld:ort():dot(tocenter))
-	local r = ufo.attributes.radius
+	local h=abs(ld:ort_dot(tocenter))
+	local r = col.attributes.radius
 	if (h>r) return
 	local w=sqrt(r*r-h*h)
 	local hit_dist=dist-w
-	if (laser.hit and (laser.hit.distance<hit_dist)) return
-	local hit_point=lp+ld:scaled(hit_dist)
-	local hit_normal=hit_point-ufo.pos
-	
-	local normal=hit_normal:normalized()
-	local hit={
-			distance=hit_dist,
-			point=hit_point,
-			normal=normal,
-			hit_object=ufo,
-			hit_angle=-normal:dot(ld)
-		}
-	laser.hit=hit
+	if (hit.object and (hit.distance<hit_dist)) return
+	hit.distance=hit_dist
+	hit.point:set(ld):scale(hit_dist):add(lp)
+	hit.normal:set(hit.point):sub(col.pos):normalize()
+	hit.object=col
+	hit.angle=-hit.normal:dot(ld)
+end
+
+function make_hit(laser)
+	laser.hit={
+		distance=0,
+		point=make_vec2(0,0),
+		normal=make_vec2(0,0),
+		object=nil,
+		angle=0
+	}
+	return laser.hit
 end
 
 function update_laser_hit(laser)
-	laser.hit=nil
+	local hit=laser.hit or make_hit(laser)
+	hit.object=nil
 	for k,ufo in pairs(live_ufos) do
 		if ufo.index!=laser.index then
 			compute_hit(laser,ufo)
@@ -593,9 +604,7 @@ function update_laser_hit(laser)
 		compute_hit(laser,asteroids[i])
 	end
 	if (not laser.trigger) return
-	local hit=laser.hit
-	if (not hit) return
-	local hit_object=hit.hit_object
+	local hit_object=hit.object
 	if (not hit_object or not hit_object.on_hit) return
 	hit_object:on_hit(hit)
 end
@@ -608,7 +617,8 @@ function spawn_hit_particles(hit,index)
 	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
 	 	local offset=arg_vec2(rnd(2))
 	 	offset:scale(rnd(0.2))
-	 	make_particle(hit.point,vel+offset,index,c,rnd(300))
+	 	local partpos=make_vec2():set(hit.point)
+	 	make_particle(partpos,vel+offset,index,c,rnd(300))
 	 end
 end
 
