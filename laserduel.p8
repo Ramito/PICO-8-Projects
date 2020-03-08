@@ -626,7 +626,7 @@ function draw_laser(laser)
 	apply_pal(laser.index)
 	local origin=ufos[laser.index].pos
 	local dest
-	if (laser.hit) then
+	if (laser.hit.object) then
 	 dest=laser.hit.point
 	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
 	else
