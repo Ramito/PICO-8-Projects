@@ -625,12 +625,11 @@ end
 function draw_laser(laser)
 	apply_pal(laser.index)
 	local origin=ufos[laser.index].pos
-	local dest
+	local dest=get_cached_vec2(1)
 	if (laser.hit.object) then
-	 dest=laser.hit.point
+	 dest:set(laser.hit.point)
 	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
 	else
-		dest=get_cached_vec2(1)
 		dest:set_arg(laser.aim)
 			:scale(180):add(origin)
 	end
@@ -646,8 +645,10 @@ function draw_laser(laser)
 			local alpha=rnd(1)
 			local c=2
 			if (rnd(1)<0.06) c=8
-			local point=origin:scaled(alpha)+dest:scaled(1-alpha)
-		 pset(point.x,point.y,c)
+			local to=get_cached_vec2(3)
+			to:set(dest):scale(1-alpha)
+			o_d:set(origin):scale(alpha):add(to)
+			draw_pixel(o_d.x,o_d.y,c)
 		end
 	end
 end
@@ -821,17 +822,21 @@ function process_particle(part)
 	end
 end
 
-function draw_particle(part)
-	if (0.33<rnd(1)) return
-	local x=flr(part.pos.x+0.5)
+function draw_pixel(x,y,color)
+	local x=flr(x+0.5)
 	if (x<0 or x>=128) return
-	local y=flr(part.pos.y+0.5)
+	local y=flr(y+0.5)
 	if (y<0 or y>=128)return
 	local xdiv=flr(x/2)
 	local xmod=x%2
+	color=(1+15*xmod)*color
 	local addr=xdiv+(y*64)
-	local color=(1+15*xmod)*part.col
 	poke(0x6000+addr,color)
+end
+
+function draw_particle(part)
+	if (0.33<rnd(1)) return
+	draw_pixel(part.pos.x,part.pos.y,part.col)
 end
 __gfx__
 000000000660000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
