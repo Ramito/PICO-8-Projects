@@ -630,13 +630,16 @@ function draw_laser(laser)
 	 dest=laser.hit.point
 	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
 	else
-		dest=origin+arg_vec2(laser.aim):scaled(180)
+		dest=get_cached_vec2(1)
+		dest:set_arg(laser.aim)
+			:scale(180):add(origin)
 	end
 	if laser.trigger then
 		line(origin.x,origin.y,dest.x,dest.y,8)
 		circfill(dest.x,dest.y,2,8)
 	else
-		local o_d=origin-dest
+		local o_d=get_cached_vec2(2)
+		o_d:set(origin):sub(dest)
 		local max_pts=0.172*sqrt(o_d:dot(o_d))
 		local points=rnd(max_pts)
 		for i=1,points do
