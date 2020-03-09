@@ -118,9 +118,11 @@ function on_ufo_hit(ufo,hit)
 	for i=1,200 do
 		local pos=arg_vec2(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
+		pos:add(ufo.pos)
 		local vel=arg_vec2(rnd(2))
 		vel:scale(rnd(0.25))
-		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(500))
+		vel:add(ufo.vel)
+		make_particle(pos,vel,ufo.index,8,rnd(500))
 	end
 	ufo_respawn_queue[ufo.index]=600
 	emax=max(stat(1)-e_start,e_max)
@@ -784,27 +786,30 @@ end
 
 function part_vs_col(part,col)
 		local radius=get_radius(col)
-		local dp=col.pos-part.pos
+		local dp=get_cached_vec2(1)
+		dp:set(col.pos):sub(part.pos)
 		distsq = dp:dot(dp)
 		if (distsq> radius*radius) return	
 		dp:scale(1/sqrt(distsq))
-		local dv=col.vel-part.vel
+		local dv=get_cached_vec2(2)
+		dv:set(col.vel):sub(part.vel)
 		local vel_p=dp:dot(dv)
 		if (vel_p>=0) return
-		local vp=dp:scaled(vel_p)
-		part.vel=col.vel+vp
+		dp:scale(vel_p)
+		part.vel:set(col.vel):add(dp)
 end
 
 function part_vs_exp(part,exp)
 	local radius=exp.radius
-	local dp=part.pos-exp.pos
+	local dp=get_cached_vec2(1)
+	dp:set(part.pos):sub(exp.pos)
 	distsq = dp:dot(dp)
 	if (distsq>radius*radius) return		
 	local exp_vel=explode_strength(exp)
 	dp:scale(1/sqrt(distsq))
 	local vproj=dp:dot(part.vel)
 	if (exp_vel<vproj) return
-	part.vel+=dp:scaled(0.125*(exp_vel-vproj))
+	part.vel:add(dp:scale(0.125*(exp_vel-vproj)))
 end
 
 function process_particle(part)
