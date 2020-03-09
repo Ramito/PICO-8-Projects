@@ -440,6 +440,9 @@ function make_vec2(x,y)
 	setmetatable(v,_vec2_mt)
 	return v
 end
+function copy_vec2(v)
+	return make_vec2(v.x,v.y)
+end
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
 end
@@ -617,8 +620,9 @@ function spawn_hit_particles(hit,index)
 	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
 	 	local offset=arg_vec2(rnd(2))
 	 	offset:scale(rnd(0.2))
-	 	local partpos=make_vec2():set(hit.point)
-	 	make_particle(partpos,vel+offset,index,c,rnd(300))
+	 	local partpos=copy_vec2(hit.point)
+	 	local partvel=copy_vec2(vel):add(offset)
+	 	make_particle(partpos,partvel,index,c,rnd(300))
 	 end
 end
 
