@@ -18,6 +18,9 @@ function _init()
 	create_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
+	for i=1,1000 do
+		alloc_part(0)
+	end
 end
 
 function _update60()
@@ -37,31 +40,32 @@ function _update60()
 	foreach(explosions,update_explosion)
 	hash_explosions()
 	update_particles()
-	foreach(particles,process_particle)
+	process_particles()
 	s_end=stat(1)
 end
 
 function _draw()
- r_start=stat(1)
- cls(0)
- foreach(particles,draw_particle)
- foreach(asteroids,draw_asteroid)
- foreach(lasers,draw_laser)
- foreach(live_ufos,draw_ufo)
- foreach(explosions,draw_explosion)
- rect(0,0,127,127,1)
- r_end=stat(1)
- pal()
- local s=s_end-s_start
- smax=max(s,smax)
- local r=r_end-r_start
- rmax=max(r,rmax)
- print("sim: "..flr(100*s).."%")
- print("ren: "..flr(100*r).."%")
- print("tot: "..flr(100*(s+r)).."%")
- print("exp max: "..flr(100*emax).."%")
- print("sim max: "..flr(100*smax).."%")
- print("ren max: "..flr(100*rmax).."%")
+	r_start=stat(1)
+	cls(0)
+	draw_particles()
+	foreach(asteroids,draw_asteroid)
+	foreach(lasers,draw_laser)
+	foreach(live_ufos,draw_ufo)
+	foreach(explosions,draw_explosion)
+	rect(0,0,127,127,1)
+	r_end=stat(1)
+	pal()
+	local s=s_end-s_start
+	smax=max(s,smax)
+	local r=r_end-r_start
+	rmax=max(r,rmax)
+	print("sim: "..flr(100*s).."%")
+	print("ren: "..flr(100*r).."%")
+	print("tot: "..flr(100*(s+r)).."%")
+	print("exp max: "..flr(100*emax).."%")
+	print("sim max: "..flr(100*smax).."%")
+	print("ren max: "..flr(100*rmax).."%")
+	print("particles:"..active_particles)
 end
 
 -->8
@@ -114,18 +118,18 @@ function on_ufo_hit(ufo,hit)
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
 	make_exp(ufo.pos,0,22.5,0.0125)
-	local e_start=stat(1)
+	local estart=stat(1)
 	for i=1,200 do
-		local pos=arg_vec2(rnd(2))
+		local pos=get_cached_vec2(1):set_arg(rnd(2))
 		pos:scale(rnd(get_radius(ufo)))
 		pos:add(ufo.pos)
-		local vel=arg_vec2(rnd(2))
+		local vel=get_cached_vec2(2):set_arg(rnd(2))
 		vel:scale(rnd(0.25))
 		vel:add(ufo.vel)
 		make_particle(pos,vel,ufo.index,8,rnd(500))
 	end
+	emax=max(stat(1)-estart,e_max)
 	ufo_respawn_queue[ufo.index]=600
-	emax=max(stat(1)-e_start,e_max)
 end
 
 function on_asteroid_hit(ast,hit)
@@ -749,25 +753,48 @@ function apply_pal(indx)
 	end
 end
 
+active_particles=0
 particles={}
 
+function alloc_part()
+	if(active_particles==#particles) add(particles,create_part())
+	active_particles+=1
+	return particles[active_particles]
+end
+
+function create_part()
+	local part = {
+		life=0,
+		pos=make_vec2(),
+		vel=make_vec2(),
+		col=0,
+		palette=0
+	}
+	return part
+end
+
 function make_particle(pos,vel,palette,col,life)
-	local part={}
-	part.pos=pos
-	part.vel=vel
+	local part=alloc_part()
+	part.life=life,
+	part.pos:set(pos)
+	part.vel:set(vel)
 	part.col=col
 	part.palette=palette
-	part.life=life
-	add(particles,part)
 end
 
 function update_particles()
-	for i,part in pairs(particles) do
-		part.pos:add(part.vel)
-		part.vel:scale(0.97225)
+	local i=1
+	while i<=active_particles do
+		local part=particles[i]
 		part.life-=1
-		if part.life<=0 then
-			del(particles,part)
+		if part.life >= 0 then
+			part.pos:add(part.vel)
+			part.vel:scale(0.97225)
+			i+=1
+		else
+			particles[i]=particles[active_particles]
+			particles[active_particles]=part
+			active_particles-=1
 		end
 	end
 end
@@ -800,21 +827,24 @@ function part_vs_exp(part,exp)
 	part.vel:add(dp:scale(0.125*(exp_vel-vproj)))
 end
 
-function process_particle(part)
-	local ix,iy=grid_coords(part.pos)
-	local cellid=hash_cell(ix,iy)
-	local colliders=col_sp_hash[cellid]
-	if colliders then
-		for k,i in pairs(colliders) do
-			local col=col_hash_id[i]
-			part_vs_col(part,col)
+function process_particles()
+	for index=1,active_particles do
+		local part=particles[index]
+		local ix,iy=grid_coords(part.pos)
+		local cellid=hash_cell(ix,iy)
+		local colliders=col_sp_hash[cellid]
+		if colliders then
+			for k,i in pairs(colliders) do
+				local col=col_hash_id[i]
+				part_vs_col(part,col)
+			end
 		end
-	end
-	local expls=exp_sp_hash[cellid]
-	if expls then
-		for k,i in pairs(expls) do
-			local exp=exp_hash_id[i]
-			part_vs_exp(part,exp)
+		local expls=exp_sp_hash[cellid]
+		if expls then
+			for k,i in pairs(expls) do
+				local exp=exp_hash_id[i]
+				part_vs_exp(part,exp)
+			end
 		end
 	end
 end
@@ -831,9 +861,11 @@ function draw_pixel(x,y,color)
 	poke(0x6000+addr,color)
 end
 
-function draw_particle(part)
-	if (0.33<rnd(1)) return
-	draw_pixel(part.pos.x,part.pos.y,part.col)
+function draw_particles()
+	for i=1,active_particles do
+	local part = particles[i]
+		if (0.33>rnd(1)) draw_pixel(part.pos.x,part.pos.y,part.col)
+	end
 end
 __gfx__
 000000000660000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
