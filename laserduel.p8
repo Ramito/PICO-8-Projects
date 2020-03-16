@@ -363,21 +363,6 @@ end
 -->8
 --math
 --vec2
---vec2--metatable
-_vec2_mt={
-	__add=
-		function(a,b)
-			return make_vec2(a.x+b.x,a.y+b.y)
-		end,
-	__sub=
-		function(a,b)
-			return make_vec2(a.x-b.x,a.y-b.y)
-		end,
-	__eq=
-		function(a,b)
-			return a.x==b.x and a.y==b.y
-		end
-}
 --vec2--api table
 _vec2_api={
 	add=function(a,b)
@@ -435,7 +420,10 @@ _vec2_api={
 			return a:scaled(1/norm)
 		end
 }
-_vec2_mt.__index=_vec2_api
+--vec2--metatable
+_vec2_mt={
+	__index=_vec2_api
+}
 --vec2--factory
 function make_vec2(x,y)
 	local v={x=x,y=y}
