@@ -18,6 +18,7 @@ function _init()
 	create_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
+	initialize_random()
 	for i=1,1000 do
 		alloc_part(0)
 	end
@@ -35,9 +36,9 @@ function _update60()
 	resolve_hash_collisions()
 	if (time()%0.25==0 and rnd(1)<0.3333) spawn_random_ast()
 --lasers
+	foreach(explosions,update_explosion)
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
-	foreach(explosions,update_explosion)
 	hash_explosions()
 	update_particles()
 	process_particles()
@@ -117,16 +118,21 @@ function on_ufo_hit(ufo,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
-	make_exp(ufo.pos,0,22.5,0.0125)
+	local exp_str=0.175*explode_strength(make_exp(ufo.pos,0,70,0.001))
 	local estart=stat(1)
-	for i=1,200 do
-		local pos=get_cached_vec2(1):set_arg(rnd(2))
-		pos:scale(rnd(get_radius(ufo)))
+	local radius=get_radius(ufo)
+	local particles=120
+	local p_i=flr(rnd(#random_arg_vec2-particles))
+	local v_i=flr(rnd(#random_arg_vec2-particles))
+	for i=1,particles do
+		local normpos=random_arg_vec2[p_i+i]
+		local pos=get_cached_vec2(1):set(normpos)
+		pos:scale(rnd(radius))
 		pos:add(ufo.pos)
-		local vel=get_cached_vec2(2):set_arg(rnd(2))
-		vel:scale(rnd(0.25))
+		local vel=get_cached_vec2(2):set(normpos):scale(exp_str)
+		vel:add(get_cached_vec2(3):set(random_arg_vec2[v_i+i]):scale(rnd(0.3)))
 		vel:add(ufo.vel)
-		make_particle(pos,vel,ufo.index,8,rnd(500))
+		make_particle(pos,vel,ufo.index,8,rnd(750))
 	end
 	emax=max(stat(1)-estart,e_max)
 	ufo_respawn_queue[ufo.index]=600
@@ -346,17 +352,19 @@ function make_exp(pos,radius,max_radius,strength)
 	expl.max_radius=max_radius
 	expl.strength=strength
 	add(explosions,expl)
+	return expl
 end
 
 function explode_strength(expl)
 	local mr=expl.max_radius
 	local r=expl.radius
-	return expl.strength*((mr*mr)-(r*r))
+	local diff=mr-r
+	return expl.strength*diff*diff
 end
 
 function update_explosion(expl)
 	local growth=explode_strength(expl)
-	if (growth<=0.01) del(explosions,expl) return
+	if (growth<=0.5) del(explosions,expl) return
 	expl.radius+=growth
 end
 
@@ -405,9 +413,6 @@ _vec2_api={
 			a.y*=s
 			return a
 		end,
-	scaled=function(a,s)
-			return make_vec2(a.x*s,a.y*s)
-		end,
 	ort=function(a)
 			return make_vec2(a.y,-a.x)
 		end,
@@ -418,10 +423,6 @@ _vec2_api={
 			local norm=sqrt(a:dot(a))
 			a:scale(1/norm)
 			return a
-		end,
-	normalized=function(a)
-			local norm=sqrt(a:dot(a))
-			return a:scaled(1/norm)
 		end
 }
 --vec2--metatable
@@ -499,6 +500,12 @@ function clamp(val,min,max)
 	return val
 end
 
+random_arg_vec2={}
+function initialize_random()
+	for i=1,1000 do
+		add(random_arg_vec2,arg_vec2(rnd(2)))
+	end
+end
 
 local screen_rect=make_rect(make_vec2(0,0),make_vec2(128,128))
 -->8
@@ -607,17 +614,17 @@ function update_laser_hit(laser)
 end
 
 function spawn_hit_particles(hit,index)
-	 local part_count=rnd(2)
-	 local c=8
-	 if (rnd(1)<0.2) c=2
-	 for i=1,part_count do
-	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
-	 	local offset=arg_vec2(rnd(2))
-	 	offset:scale(rnd(0.2))
-	 	local partpos=copy_vec2(hit.point)
-	 	local partvel=copy_vec2(vel):add(offset)
-	 	make_particle(partpos,partvel,index,c,rnd(300))
-	 end
+	local part_count=rnd(2)
+	local c=8
+	if (rnd(1)<0.2) c=2
+	local rnd_i=flr(rnd(#random_arg_vec2))
+	for i=1,part_count do
+		local vel=get_cached_vec2(4):set(hit.normal):scale(0.225+rnd(0.225))
+		local offset=get_cached_vec2(5):set(random_arg_vec2[1+rnd_i])
+		offset:scale(rnd(0.2))
+		vel:add(offset)
+		make_particle(hit.point,vel,index,c,rnd(300))
+	end
 end
 
 function draw_laser(laser)
@@ -682,7 +689,7 @@ function create_asteroid(x,y)
 	local pos=make_vec2(x,y)
 	local ast={}
 	ast.pos=pos
-	ast.vel=arg_vec2(rnd(1)):scaled(0.08)
+	ast.vel=arg_vec2(rnd(1)):scale(0.08)
 	local prot_ind=flr(rnd(#ast_prot_map))+1
 	ast.attributes=ast_prot_map[prot_ind]
 	ast.on_hit=on_asteroid_hit
@@ -716,7 +723,7 @@ function spawn_random_ast()
 		axis=0.25
 	end
 	axis+=(rnd(0.4)-0.2)
-	local vel=arg_vec2(axis):scaled(0.025+rnd(0.3))
+	local vel=arg_vec2(axis):scale(0.025+rnd(0.3))
 	create_asteroid(pos.x,pos.y).vel=vel
 end
 
@@ -753,11 +760,12 @@ function apply_pal(indx)
 	end
 end
 
+allocated_particles=0
 active_particles=0
 particles={}
 
 function alloc_part()
-	if(active_particles==#particles) add(particles,create_part())
+	if(active_particles==allocated_particles) allocated_particles+=1 add(particles,create_part())
 	active_particles+=1
 	return particles[active_particles]
 end
@@ -775,7 +783,7 @@ end
 
 function make_particle(pos,vel,palette,col,life)
 	local part=alloc_part()
-	part.life=life,
+	part.life=flr(life),
 	part.pos:set(pos)
 	part.vel:set(vel)
 	part.col=col
@@ -824,7 +832,7 @@ function part_vs_exp(part,exp)
 	dp:scale(1/sqrt(distsq))
 	local vproj=dp:dot(part.vel)
 	if (exp_vel<vproj) return
-	part.vel:add(dp:scale(0.125*(exp_vel-vproj)))
+	part.vel:add(dp:scale(0.175*(exp_vel-vproj)))
 end
 
 function process_particles()
