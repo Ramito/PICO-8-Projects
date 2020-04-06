@@ -6,6 +6,7 @@ __lua__
 
 function _init()
 	cls()
+	setup_palette()
 	ufos={}
 	live_ufos={}
 	ufo_respawn_queue={}
@@ -112,7 +113,7 @@ function on_ufo_hit(ufo,hit)
 		pos:add(ufo.pos)
 		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.3))
 		vel:add(ufo.vel)
-		make_particle(pos,vel,ufo.index,8,30+rnd(800))
+		make_particle(pos,vel,ufo.index,30+rnd(800))
 	end
 	ufo_respawn_queue[ufo.index]=600
 end
@@ -594,15 +595,13 @@ end
 
 function spawn_hit_particles(hit,index)
 	local part_count=rnd(2)
-	local c=8
-	if (rnd(1)<0.2) c=2
 	local rnd_i=flr(rnd(#random_arg_vec2))
 	for i=1,part_count do
 		local vel=get_cached_vec2(4):set(hit.normal):scale(0.225+rnd(0.225))
 		local offset=get_cached_vec2(5):set(random_arg_vec2[1+rnd_i])
 		offset:scale(rnd(0.2))
 		vel:add(offset)
-		make_particle(hit.point,vel,index,c,rnd(300))
+		make_particle(hit.point,vel,index,rnd(300))
 	end
 end
 
@@ -632,7 +631,7 @@ function draw_laser(laser)
 			local to=get_cached_vec2(3)
 			to:set(dest):scale(1-alpha)
 			o_d:set(origin):scale(alpha):add(to)
-			draw_pixel(o_d.x,o_d.y,c)
+			draw_pixel(o_d.x,o_d.y,map_color(laser.index,c))
 		end
 	end
 end
@@ -727,15 +726,34 @@ end
 --palette & particles
 
 palettes={}
-palettes[4]={}
-palettes[2]={{8,10},{2,9},{14,7}}
-palettes[3]={{8,12},{2,1},{14,7}}
-palettes[1]={{8,11},{2,3},{14,10}}
+function setup_palette()
+	palettes[4]={}
+	local pl = {}
+	pl[8]=10
+	pl[2]=9
+	pl[14]=7
+	palettes[2]=pl
+	local pl = {}
+	pl[8]=12
+	pl[2]=1
+	pl[14]=7
+	palettes[3]=pl
+	local pl = {}
+	pl[8]=11
+	pl[2]=3
+	pl[14]=10
+	palettes[1]=pl
+end
+
+function map_color(pal_idx,color)
+	local palette = palettes[pal_idx]
+	return palette[color] or color
+end
 
 function apply_pal(indx)
- pal()
-	for v in all(palettes[indx]) do
-			pal(v[1],v[2])
+	pal()
+	for k,v in pairs(palettes[indx]) do
+		pal(k,v)
 	end
 end
 
@@ -754,18 +772,16 @@ function create_part()
 		life=0,
 		pos=make_vec2(),
 		vel=make_vec2(),
-		col=0,
 		palette=0
 	}
 	return part
 end
 
-function make_particle(pos,vel,palette,col,life)
+function make_particle(pos,vel,palette,life)
 	local part=alloc_part()
 	part.life=flr(life),
 	part.pos:set(pos)
 	part.vel:set(vel)
-	part.col=col
 	part.palette=palette
 end
 
@@ -848,8 +864,18 @@ end
 
 function draw_particles()
 	for i=1,active_particles do
-	local part = particles[i]
-		if (0.33>rnd(1)) draw_pixel(part.pos.x,part.pos.y,part.col)
+		local part = particles[i]
+		if (0.8>rnd(1)) then
+			local base_color = 8
+			local color_die=rnd(1)
+			if (color_die<0.1) then
+				base_color=14
+			elseif (color_die<0.75) then
+				base_color=2
+			end
+			local color = map_color(part.palette,base_color)
+			draw_pixel(part.pos.x,part.pos.y,color)
+		end
 	end
 end
 __gfx__
