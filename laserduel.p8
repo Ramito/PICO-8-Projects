@@ -25,28 +25,25 @@ function _init()
 end
 
 function _update60()
-	s_start=stat(1)
+	clear_hash()
 	update_ufo_spawn()
+	foreach(explosions,update_explosion)
+	hash_explosions()
 --ufos and collisions
 	foreach(live_ufos,update_ufo)
 	foreach(asteroids,update_asteroid)
-	clear_hash()
 	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
 	if (time()%0.25==0 and rnd(1)<0.3333) spawn_random_ast()
 --lasers
-	foreach(explosions,update_explosion)
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
-	hash_explosions()
 	update_particles()
 	process_particles()
-	s_end=stat(1)
 end
 
 function _draw()
-	r_start=stat(1)
 	cls(0)
 	draw_particles()
 	foreach(asteroids,draw_asteroid)
@@ -54,19 +51,6 @@ function _draw()
 	foreach(live_ufos,draw_ufo)
 	foreach(explosions,draw_explosion)
 	rect(0,0,127,127,1)
-	r_end=stat(1)
-	pal()
-	local s=s_end-s_start
-	smax=max(s,smax)
-	local r=r_end-r_start
-	rmax=max(r,rmax)
-	print("sim: "..flr(100*s).."%")
-	print("ren: "..flr(100*r).."%")
-	print("tot: "..flr(100*(s+r)).."%")
-	print("exp max: "..flr(100*emax).."%")
-	print("sim max: "..flr(100*smax).."%")
-	print("ren max: "..flr(100*rmax).."%")
-	print("particles:"..active_particles)
 end
 
 -->8
@@ -111,17 +95,14 @@ end
 -->8
 --ufo sim
 
-emax=0
-
 function on_ufo_hit(ufo,hit)
 	local kill_prob=0.2*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
-	local exp_str=0.175*explode_strength(make_exp(ufo.pos,0,70,0.001))
-	local estart=stat(1)
+	make_exp(ufo.pos,0,50,0.0025)
 	local radius=get_radius(ufo)
-	local particles=120
+	local particles=100
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
@@ -129,12 +110,10 @@ function on_ufo_hit(ufo,hit)
 		local pos=get_cached_vec2(1):set(normpos)
 		pos:scale(rnd(radius))
 		pos:add(ufo.pos)
-		local vel=get_cached_vec2(2):set(normpos):scale(exp_str)
-		vel:add(get_cached_vec2(3):set(random_arg_vec2[v_i+i]):scale(rnd(0.3)))
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.3))
 		vel:add(ufo.vel)
-		make_particle(pos,vel,ufo.index,8,rnd(750))
+		make_particle(pos,vel,ufo.index,8,30+rnd(800))
 	end
-	emax=max(stat(1)-estart,e_max)
 	ufo_respawn_queue[ufo.index]=600
 end
 
@@ -364,13 +343,13 @@ end
 
 function update_explosion(expl)
 	local growth=explode_strength(expl)
-	if (growth<=0.5) del(explosions,expl) return
+	if (growth<=0.25) del(explosions,expl) return
 	expl.radius+=growth
 end
 
 function draw_explosion(exp)
 	local pos=exp.pos
-	circfill(pos.x,pos.y,0.33*exp.radius,10)
+	circ(pos.x,pos.y,exp.radius,10)
 end
 -->8
 --math
@@ -813,26 +792,24 @@ function part_vs_col(part,col)
 		dp:set(col.pos):sub(part.pos)
 		distsq = dp:dot(dp)
 		if (distsq> radius*radius) return	
-		dp:scale(1/sqrt(distsq))
 		local dv=get_cached_vec2(2)
 		dv:set(col.vel):sub(part.vel)
 		local vel_p=dp:dot(dv)
 		if (vel_p>=0) return
-		dp:scale(vel_p)
+		dp:scale(vel_p/distsq)
 		part.vel:set(col.vel):add(dp)
 end
 
+local part_exp_str_mod=0.035
 function part_vs_exp(part,exp)
 	local radius=exp.radius
 	local dp=get_cached_vec2(1)
 	dp:set(part.pos):sub(exp.pos)
 	distsq = dp:dot(dp)
 	if (distsq>radius*radius) return		
-	local exp_vel=explode_strength(exp)
-	dp:scale(1/sqrt(distsq))
-	local vproj=dp:dot(part.vel)
-	if (exp_vel<vproj) return
-	part.vel:add(dp:scale(0.175*(exp_vel-vproj)))
+	local exp_vel=part_exp_str_mod*explode_strength(exp)
+	dp:scale(exp_vel/sqrt(distsq))
+	part.vel:add(dp)
 end
 
 function process_particles()
