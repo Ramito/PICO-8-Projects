@@ -18,15 +18,20 @@ function _init()
 	create_ufo(96,96,-0.7)
 	setup_asteroids()
 	spawn_asteroids()
+	initialize_random()
+	for i=1,1000 do
+		alloc_part(0)
+	end
 end
 
 function _update60()
-	s_start=stat(1)
+	clear_hash()
 	update_ufo_spawn()
+	foreach(explosions,update_explosion)
+	hash_explosions()
 --ufos and collisions
 	foreach(live_ufos,update_ufo)
 	foreach(asteroids,update_asteroid)
-	clear_hash()
 	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
@@ -34,34 +39,18 @@ function _update60()
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
-	foreach(explosions,update_explosion)
-	hash_explosions()
 	update_particles()
-	foreach(particles,process_particle)
-	s_end=stat(1)
+	process_particles()
 end
 
 function _draw()
- r_start=stat(1)
- cls(0)
- foreach(particles,draw_particle)
- foreach(asteroids,draw_asteroid)
- foreach(lasers,draw_laser)
- foreach(live_ufos,draw_ufo)
- foreach(explosions,draw_explosion)
- rect(0,0,127,127,1)
- r_end=stat(1)
- pal()
- local s=s_end-s_start
- smax=max(s,smax)
- local r=r_end-r_start
- rmax=max(r,rmax)
- print("sim: "..flr(100*s).."%")
- print("ren: "..flr(100*r).."%")
- print("tot: "..flr(100*(s+r)).."%")
- print("exp max: "..flr(100*emax).."%")
- print("sim max: "..flr(100*smax).."%")
- print("ren max: "..flr(100*rmax).."%")
+	cls(0)
+	draw_particles()
+	foreach(asteroids,draw_asteroid)
+	foreach(lasers,draw_laser)
+	foreach(live_ufos,draw_ufo)
+	foreach(explosions,draw_explosion)
+	rect(0,0,127,127,1)
 end
 
 -->8
@@ -106,42 +95,50 @@ end
 -->8
 --ufo sim
 
-emax=0
-
 function on_ufo_hit(ufo,hit)
-	local kill_prob=0.2*hit.hit_angle*hit.hit_angle
+	local kill_prob=0.2*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
-	make_exp(ufo.pos,0,22.5,0.0125)
-	local e_start=stat(1)
-	for i=1,200 do
-		local pos=arg_vec2(rnd(2))
-		pos:scale(rnd(get_radius(ufo)))
-		local vel=arg_vec2(rnd(2))
-		vel:scale(rnd(0.25))
-		make_particle(ufo.pos+pos,ufo.vel+vel,ufo.index,8,rnd(500))
+	make_exp(ufo.pos,0,50,0.0025)
+	local radius=get_radius(ufo)
+	local particles=100
+	local p_i=flr(rnd(#random_arg_vec2-particles))
+	local v_i=flr(rnd(#random_arg_vec2-particles))
+	for i=1,particles do
+		local normpos=random_arg_vec2[p_i+i]
+		local pos=get_cached_vec2(1):set(normpos)
+		pos:scale(rnd(radius))
+		pos:add(ufo.pos)
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.3))
+		vel:add(ufo.vel)
+		make_particle(pos,vel,ufo.index,8,30+rnd(800))
 	end
 	ufo_respawn_queue[ufo.index]=600
-	emax=max(stat(1)-e_start,e_max)
 end
 
 function on_asteroid_hit(ast,hit)
-	local kill_prob=0.06*hit.hit_angle*hit.hit_angle
+	local kill_prob=0.06*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	del(asteroids,ast)
 end
 
+local _vec2_cache={}
+function get_cached_vec2(index)
+	if (_vec2_cache[index]==nil) _vec2_cache[index]=make_vec2(0,0)
+	return _vec2_cache[index]
+end
+
 function thrust(ufo,angle)
-	local acc_vec=make_vec2(cos(angle),sin(angle))
-	acc_vec:scale(ufo.attributes.acc)
-	ufo.vel+=acc_vec
+	local thrust=get_cached_vec2(1)
+	thrust:set_arg(angle):scale(ufo.attributes.acc)
+	ufo.vel:add(thrust)
 end
 
 function integrate(ufo)
 	local sq_vel=ufo.vel:dot(ufo.vel)
-	ufo.vel+=ufo.vel:scaled(sqrt(sq_vel)*ufo.attributes.drag)
-	ufo.pos+=ufo.vel
+	ufo.vel:scale(1+sqrt(sq_vel)*ufo.attributes.drag)
+	ufo.pos:add(ufo.vel)
 end
 
 function screen_bounce(ufo)
@@ -168,27 +165,38 @@ end
 function collide(u_1,u_2)
 	local r1=get_radius(u_1)
 	local r2=get_radius(u_2)
-	local dp=u_2.pos-u_1.pos
 	local tresh=r1+r2
+	local dp=get_cached_vec2(1)
+	dp:set(u_2.pos):sub(u_1.pos)
 	local dist_sq=dp:dot(dp)
 	if (dist_sq>(tresh*tresh))	return
 	local dist=sqrt(dist_sq)
 	dp:scale(1/dist)
-	local pt=dp:scaled(0.5*(dist-tresh))
-	u_1.pos+=pt
-	u_2.pos-=pt
-	local dv=u_2.vel-u_1.vel
+	local pt=get_cached_vec2(2)
+	pt:set(dp):scale(0.5*(dist-tresh))
+	u_1.pos:add(pt)
+	u_2.pos:sub(pt)
+	local dv=pt--pt no longer used
+	dv:set(u_2.vel):sub(u_1.vel)
 	local	vel_p=dv:dot(dp)
 	if (vel_p>=0) return
-	local vp=dp:scaled(vel_p)
+	dp:scale(vel_p)--velocity projection vp
 	local m1=get_mass(u_1)
 	local m2=get_mass(u_2)
 	local tm=m1+m2
 	m1/=tm
 	m2=1-m1
-	local vc=u_1.vel:scaled(m1)+u_2.vel:scaled(m2)
-	u_1.vel=vc+vp:scaled(m2)
-	u_2.vel=vc-vp:scaled(m1)
+	local vc1=dv--dv no longer used
+	vc1:set(u_1.vel):scale(m1)
+	local vc2=get_cached_vec2(3)
+	vc2:set(u_2.vel):scale(m2)
+	vc1:add(vc2)
+	u_1.vel:set(vc1)
+	u_2.vel:set(vc1)
+	vc1:set(dp):scale(m2)
+	u_1.vel:add(vc1)
+	vc1:set(dp):scale(m1)
+	u_2.vel:sub(vc1)
 	sfx(1)
 end
 
@@ -256,12 +264,12 @@ function hash_objects(objects, id_map, object_hash)
 	for i=1,#objects do
 		local collider=objects[i]
 		add(id_map,collider)
+		local offset=get_cached_vec2(1)
 		local r=get_radius(collider)
-		local offset=make_vec2(r,r)
-		local minp=collider.pos-offset
-		local maxp=collider.pos+offset
-		local iminx,iminy=grid_coords(minp)
-		local imaxx,imaxy=grid_coords(maxp)
+		offset:set_coords(-r,-r):add(collider.pos)
+		local iminx,iminy=grid_coords(offset)
+		offset:set_coords(r,r):add(collider.pos)
+		local imaxx,imaxy=grid_coords(offset)
 		for ix=iminx,imaxx do
 			for iy=iminy,imaxy do
 				local cellid=hash_cell(ix,iy)
@@ -323,68 +331,91 @@ function make_exp(pos,radius,max_radius,strength)
 	expl.max_radius=max_radius
 	expl.strength=strength
 	add(explosions,expl)
+	return expl
 end
 
 function explode_strength(expl)
 	local mr=expl.max_radius
 	local r=expl.radius
-	return expl.strength*((mr*mr)-(r*r))
+	local diff=mr-r
+	return expl.strength*diff*diff
 end
 
 function update_explosion(expl)
 	local growth=explode_strength(expl)
-	if (growth<=0.01) del(explosions,expl) return
+	if (growth<=0.25) del(explosions,expl) return
 	expl.radius+=growth
 end
 
 function draw_explosion(exp)
 	local pos=exp.pos
-	circfill(pos.x,pos.y,0.33*exp.radius,10)
+	circ(pos.x,pos.y,exp.radius,10)
 end
 -->8
 --math
 --vec2
---vec2--metatable
-_vec2_mt={
-	__add=
-		function(a,b)
-			return make_vec2(a.x+b.x,a.y+b.y)
-		end,
-	__sub=
-		function(a,b)
-			return make_vec2(a.x-b.x,a.y-b.y)
-		end,
-	__eq=
-		function(a,b)
-			return a.x==b.x and a.y==b.y
-		end
-}
 --vec2--api table
 _vec2_api={
+	add=function(a,b)
+			a.x+=b.x
+			a.y+=b.y
+			return a
+		end,
+	sub=function(a,b)
+			a.x-=b.x
+			a.y-=b.y
+			return a
+		end,
+	set_coords=function(a,x,y)
+			a.x=x
+			a.y=y
+			return a
+		end,
+	set_arg=function(a,arg)
+			a.x=cos(arg)
+			a.y=sin(arg)
+			return a
+		end,
+	set=function(a,b)
+			a.x=b.x
+			a.y=b.y
+			return a
+		end,
+	copy=function(a)
+			return make_vec(a.x,a.y)
+		end,
 	dot=function(a,b)
 			return a.x*b.x+a.y*b.y
 		end,
 	scale=function(a,s)
 			a.x*=s
 			a.y*=s
-		end,
-	scaled=function(a,s)
-			return make_vec2(a.x*s,a.y*s)
+			return a
 		end,
 	ort=function(a)
 			return make_vec2(a.y,-a.x)
 		end,
-	normalized=function(a)
-		local norm=sqrt(a:dot(a))
-		return a:scaled(1/norm)
-	end
+	ort_dot=function(a,b)
+			return a.y*b.x-a.x*b.y
+		end,
+	normalize=function(a)
+			local norm=sqrt(a:dot(a))
+			a:scale(1/norm)
+			return a
+		end
 }
-_vec2_mt.__index=_vec2_api
+--vec2--metatable
+_vec2_mt={
+	__index=_vec2_api
+}
 --vec2--factory
 function make_vec2(x,y)
 	local v={x=x,y=y}
 	setmetatable(v,_vec2_mt)
 	return v
+end
+function copy_vec2(v)
+	return make_vec2(v.x,v.y)
 end
 function arg_vec2(arg)
 	return make_vec2(cos(arg),sin(arg))
@@ -418,8 +449,8 @@ _rect_api={
 	vec2_dist_sq=
 		function(rec,vec2)
 		 local closest=rec:closest_to(vec2)
-		 local gap=closest-vec2
-		 return gap:dot(gap)
+		 closest:sub(vec2) --gap
+		 return closest:dot(closest)
 		end,
 	overlaps_rect=
 		function(a,b)
@@ -448,6 +479,12 @@ function clamp(val,min,max)
 	return val
 end
 
+random_arg_vec2={}
+function initialize_random()
+	for i=1,1000 do
+		add(random_arg_vec2,arg_vec2(rnd(2)))
+	end
+end
 
 local screen_rect=make_rect(make_vec2(0,0),make_vec2(128,128))
 -->8
@@ -505,34 +542,42 @@ function update_laser(laser)
 	end
 end
 
-function compute_hit(laser,ufo)
-	local ld=arg_vec2(laser.aim)
+function compute_hit(laser,col)
+	local hit=laser.hit
+	local ld=get_cached_vec2(1)
+	ld:set_arg(laser.aim)
 	local lp=ufos[laser.index].pos
-	local tocenter=ufo.pos-lp
+	local tocenter=get_cached_vec2(2)
+	tocenter:set(col.pos):sub(lp)
 	local dist=ld:dot(tocenter)
 	if (dist<0) return
-	local h=abs(ld:ort():dot(tocenter))
-	local r = ufo.attributes.radius
+	local h=abs(ld:ort_dot(tocenter))
+	local r = col.attributes.radius
 	if (h>r) return
 	local w=sqrt(r*r-h*h)
 	local hit_dist=dist-w
-	if (laser.hit and (laser.hit.distance<hit_dist)) return
-	local hit_point=lp+ld:scaled(hit_dist)
-	local hit_normal=hit_point-ufo.pos
-	
-	local normal=hit_normal:normalized()
-	local hit={
-			distance=hit_dist,
-			point=hit_point,
-			normal=normal,
-			hit_object=ufo,
-			hit_angle=-normal:dot(ld)
-		}
-	laser.hit=hit
+	if (hit.object and (hit.distance<hit_dist)) return
+	hit.distance=hit_dist
+	hit.point:set(ld):scale(hit_dist):add(lp)
+	hit.normal:set(hit.point):sub(col.pos):normalize()
+	hit.object=col
+	hit.angle=-hit.normal:dot(ld)
+end
+
+function make_hit(laser)
+	laser.hit={
+		distance=0,
+		point=make_vec2(0,0),
+		normal=make_vec2(0,0),
+		object=nil,
+		angle=0
+	}
+	return laser.hit
 end
 
 function update_laser_hit(laser)
-	laser.hit=nil
+	local hit=laser.hit or make_hit(laser)
+	hit.object=nil
 	for k,ufo in pairs(live_ufos) do
 		if ufo.index!=laser.index then
 			compute_hit(laser,ufo)
@@ -542,48 +587,52 @@ function update_laser_hit(laser)
 		compute_hit(laser,asteroids[i])
 	end
 	if (not laser.trigger) return
-	local hit=laser.hit
-	if (not hit) return
-	local hit_object=hit.hit_object
+	local hit_object=hit.object
 	if (not hit_object or not hit_object.on_hit) return
 	hit_object:on_hit(hit)
 end
 
 function spawn_hit_particles(hit,index)
-	 local part_count=rnd(2)
-	 local c=8
-	 if (rnd(1)<0.2) c=2
-	 for i=1,part_count do
-	 	local vel=hit.normal:scaled(0.225+rnd(0.225))
-	 	local offset=arg_vec2(rnd(2))
-	 	offset:scale(rnd(0.2))
-	 	make_particle(hit.point,vel+offset,index,c,rnd(300))
-	 end
+	local part_count=rnd(2)
+	local c=8
+	if (rnd(1)<0.2) c=2
+	local rnd_i=flr(rnd(#random_arg_vec2))
+	for i=1,part_count do
+		local vel=get_cached_vec2(4):set(hit.normal):scale(0.225+rnd(0.225))
+		local offset=get_cached_vec2(5):set(random_arg_vec2[1+rnd_i])
+		offset:scale(rnd(0.2))
+		vel:add(offset)
+		make_particle(hit.point,vel,index,c,rnd(300))
+	end
 end
 
 function draw_laser(laser)
 	apply_pal(laser.index)
 	local origin=ufos[laser.index].pos
-	local dest
-	if (laser.hit) then
-	 dest=laser.hit.point
+	local dest=get_cached_vec2(1)
+	if (laser.hit.object) then
+	 dest:set(laser.hit.point)
 	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
 	else
-		dest=origin+arg_vec2(laser.aim):scaled(180)
+		dest:set_arg(laser.aim)
+			:scale(180):add(origin)
 	end
 	if laser.trigger then
 		line(origin.x,origin.y,dest.x,dest.y,8)
 		circfill(dest.x,dest.y,2,8)
 	else
-		local o_d=origin-dest
+		local o_d=get_cached_vec2(2)
+		o_d:set(origin):sub(dest)
 		local max_pts=0.172*sqrt(o_d:dot(o_d))
 		local points=rnd(max_pts)
 		for i=1,points do
 			local alpha=rnd(1)
 			local c=2
 			if (rnd(1)<0.06) c=8
-			local point=origin:scaled(alpha)+dest:scaled(1-alpha)
-		 pset(point.x,point.y,c)
+			local to=get_cached_vec2(3)
+			to:set(dest):scale(1-alpha)
+			o_d:set(origin):scale(alpha):add(to)
+			draw_pixel(o_d.x,o_d.y,c)
 		end
 	end
 end
@@ -619,7 +668,7 @@ function create_asteroid(x,y)
 	local pos=make_vec2(x,y)
 	local ast={}
 	ast.pos=pos
-	ast.vel=arg_vec2(rnd(1)):scaled(0.08)
+	ast.vel=arg_vec2(rnd(1)):scale(0.08)
 	local prot_ind=flr(rnd(#ast_prot_map))+1
 	ast.attributes=ast_prot_map[prot_ind]
 	ast.on_hit=on_asteroid_hit
@@ -653,12 +702,12 @@ function spawn_random_ast()
 		axis=0.25
 	end
 	axis+=(rnd(0.4)-0.2)
-	local vel=arg_vec2(axis):scaled(0.025+rnd(0.3))
+	local vel=arg_vec2(axis):scale(0.025+rnd(0.3))
 	create_asteroid(pos.x,pos.y).vel=vel
 end
 
 function update_asteroid(ast)
-	ast.pos+=ast.vel
+	ast.pos:add(ast.vel)
 	local screen_dist_sq=screen_rect:vec2_dist_sq(ast.pos)
 	local r_sq=ast.attributes.radius*ast.attributes.radius
 	if (screen_dist_sq>4*r_sq) then
@@ -690,84 +739,118 @@ function apply_pal(indx)
 	end
 end
 
+allocated_particles=0
+active_particles=0
 particles={}
 
+function alloc_part()
+	if(active_particles==allocated_particles) allocated_particles+=1 add(particles,create_part())
+	active_particles+=1
+	return particles[active_particles]
+end
+
+function create_part()
+	local part = {
+		life=0,
+		pos=make_vec2(),
+		vel=make_vec2(),
+		col=0,
+		palette=0
+	}
+	return part
+end
+
 function make_particle(pos,vel,palette,col,life)
-	local part={}
-	part.pos=pos
-	part.vel=vel
+	local part=alloc_part()
+	part.life=flr(life),
+	part.pos:set(pos)
+	part.vel:set(vel)
 	part.col=col
 	part.palette=palette
-	part.life=life
-	add(particles,part)
 end
 
 function update_particles()
-	for i,part in pairs(particles) do
-		part.pos+=part.vel
-		part.vel:scale(0.97225)
+	local i=1
+	while i<=active_particles do
+		local part=particles[i]
 		part.life-=1
-		if part.life<=0 then
-			del(particles,part)
+		if part.life >= 0 then
+			part.pos:add(part.vel)
+			part.vel:scale(0.97225)
+			i+=1
+		else
+			particles[i]=particles[active_particles]
+			particles[active_particles]=part
+			active_particles-=1
 		end
 	end
 end
 
 function part_vs_col(part,col)
 		local radius=get_radius(col)
-		local dp=col.pos-part.pos
+		local dp=get_cached_vec2(1)
+		dp:set(col.pos):sub(part.pos)
 		distsq = dp:dot(dp)
 		if (distsq> radius*radius) return	
-		dp:scale(1/sqrt(distsq))
-		local dv=col.vel-part.vel
+		local dv=get_cached_vec2(2)
+		dv:set(col.vel):sub(part.vel)
 		local vel_p=dp:dot(dv)
 		if (vel_p>=0) return
-		local vp=dp:scaled(vel_p)
-		part.vel=col.vel+vp
+		dp:scale(vel_p/distsq)
+		part.vel:set(col.vel):add(dp)
 end
 
+local part_exp_str_mod=0.035
 function part_vs_exp(part,exp)
 	local radius=exp.radius
-	local dp=part.pos-exp.pos
+	local dp=get_cached_vec2(1)
+	dp:set(part.pos):sub(exp.pos)
 	distsq = dp:dot(dp)
 	if (distsq>radius*radius) return		
-	local exp_vel=explode_strength(exp)
-	dp:scale(1/sqrt(distsq))
-	local vproj=dp:dot(part.vel)
-	if (exp_vel<vproj) return
-	part.vel+=dp:scaled(0.125*(exp_vel-vproj))
+	local exp_vel=part_exp_str_mod*explode_strength(exp)
+	dp:scale(exp_vel/sqrt(distsq))
+	part.vel:add(dp)
 end
 
-function process_particle(part)
-	local ix,iy=grid_coords(part.pos)
-	local cellid=hash_cell(ix,iy)
-	local colliders=col_sp_hash[cellid]
-	if colliders then
-		for k,i in pairs(colliders) do
-			local col=col_hash_id[i]
-			part_vs_col(part,col)
+function process_particles()
+	for index=1,active_particles do
+		local part=particles[index]
+		local ix,iy=grid_coords(part.pos)
+		local cellid=hash_cell(ix,iy)
+		local colliders=col_sp_hash[cellid]
+		if colliders then
+			for k,i in pairs(colliders) do
+				local col=col_hash_id[i]
+				part_vs_col(part,col)
+			end
 		end
-	end
-	local expls=exp_sp_hash[cellid]
-	if expls then
-		for k,i in pairs(expls) do
-			local exp=exp_hash_id[i]
-			part_vs_exp(part,exp)
+		local expls=exp_sp_hash[cellid]
+		if expls then
+			for k,i in pairs(expls) do
+				local exp=exp_hash_id[i]
+				part_vs_exp(part,exp)
+			end
 		end
 	end
 end
 
-function draw_particle(part)
-	if (0.33<rnd(1)) return
-	local x=flr(part.pos.x+0.5)
+function draw_pixel(x,y,color)
+	local x=flr(x+0.5)
 	if (x<0 or x>=128) return
-	local y=flr(part.pos.y+0.5)
+	local y=flr(y+0.5)
 	if (y<0 or y>=128)return
 	local xdiv=flr(x/2)
 	local xmod=x%2
+	color=(1+15*xmod)*color
 	local addr=xdiv+(y*64)
-	local color=(1+15*xmod)*part.col
 	poke(0x6000+addr,color)
+end
+
+function draw_particles()
+	for i=1,active_particles do
+	local part = particles[i]
+		if (0.33>rnd(1)) draw_pixel(part.pos.x,part.pos.y,part.col)
+	end
 end
 __gfx__
 000000000660000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
