@@ -103,7 +103,7 @@ function on_ufo_hit(ufo,hit)
 	--note we pass ufo position. could cause issues if explosions moved
 	make_exp(ufo.pos,0,50,0.0025)
 	local radius=get_radius(ufo)
-	local particles=100
+	local particles=160
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
@@ -816,7 +816,7 @@ function part_vs_col(part,col)
 		part.vel:set(col.vel):add(dp)
 end
 
-local part_exp_str_mod=0.035
+local part_exp_str_mod=0.08
 function part_vs_exp(part,exp)
 	local radius=exp.radius
 	local dp=get_cached_vec2(1)
@@ -828,23 +828,28 @@ function part_vs_exp(part,exp)
 	part.vel:add(dp)
 end
 
+local frame=0
 function process_particles()
+	frame+=1
+	local frame_mod=frame%2	--Particle collision are done at half tick rate
 	for index=1,active_particles do
-		local part=particles[index]
-		local ix,iy=grid_coords(part.pos)
-		local cellid=hash_cell(ix,iy)
-		local colliders=col_sp_hash[cellid]
-		if colliders then
-			for k,i in pairs(colliders) do
-				local col=col_hash_id[i]
-				part_vs_col(part,col)
+		if (frame_mod==(index%2)) then
+			local part=particles[index]
+			local ix,iy=grid_coords(part.pos)
+			local cellid=hash_cell(ix,iy)
+			local colliders=col_sp_hash[cellid]
+			if colliders then
+				for k,i in pairs(colliders) do
+					local col=col_hash_id[i]
+					part_vs_col(part,col)
+				end
 			end
-		end
-		local expls=exp_sp_hash[cellid]
-		if expls then
-			for k,i in pairs(expls) do
-				local exp=exp_hash_id[i]
-				part_vs_exp(part,exp)
+			local expls=exp_sp_hash[cellid]
+			if expls then
+				for k,i in pairs(expls) do
+					local exp=exp_hash_id[i]
+					part_vs_exp(part,exp)
+				end
 			end
 		end
 	end
