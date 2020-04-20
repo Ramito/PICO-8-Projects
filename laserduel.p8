@@ -610,7 +610,7 @@ function update_laser_hit(laser)
 end
 
 function spawn_hit_particles(hit,index)
-	local part_count=rnd(2)
+	local part_count=rnd(5)
 	local rnd_i=flr(rnd(#random_arg_vec2))
 	for i=1,part_count do
 		local vel=get_cached_vec2(4):set(hit.normal):scale(0.225+rnd(0.225))
