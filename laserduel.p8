@@ -320,7 +320,7 @@ end
 function draw_ufo(ufo)
 	apply_pal(ufo.index)
 	local r=ufo.attributes.radius
-	spr(1,ufo.pos.x-r,ufo.pos.y-r)
+	spr(1,flr(ufo.pos.x-r+0.5),flr(ufo.pos.y-r+0.5))
 end
 
 explosions={}
@@ -746,8 +746,8 @@ end
 function draw_asteroid(ast)
  local attrs=ast.attributes
 	spr(attrs.sprite
-	,ast.pos.x-attrs.radius
-	,ast.pos.y-attrs.radius
+	,flr(ast.pos.x-attrs.radius+0.5)
+	,flr(ast.pos.y-attrs.radius+0.5)
 	,attrs.sprite_w
 	,attrs.sprite_w)
 end
