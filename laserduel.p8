@@ -635,15 +635,28 @@ function draw_laser(laser)
 	if laser.beam_active then
 		line(origin.x,origin.y,dest.x,dest.y,8)
 		circfill(dest.x,dest.y,2,8)
-	else
+	elseif not laser.discharging then
 		local o_d=get_cached_vec2(2)
 		o_d:set(origin):sub(dest)
-		local max_pts=0.172*sqrt(o_d:dot(o_d))
+		local max_pts=0.175*sqrt(o_d:dot(o_d))
+		local reload_ticks=laser.attrs.reload_ticks
+		local laser_ticks=laser.ticks
+		local reload_mod=(reload_ticks - laser_ticks)/reload_ticks
+		max_pts*=(reload_mod*reload_mod);
+		local gleam=0.06
+		if (laser_ticks==0) then
+			max_pts*=1.5
+			gleam=0.2
+		elseif (laser_ticks<=10) then
+			max_pts*=10
+			gleam=1
+			circ(origin.x,origin.y,5*(10-laser_ticks)/10,8)
+		end
 		local points=rnd(max_pts)
 		for i=1,points do
 			local alpha=rnd(1)
 			local c=2
-			if (rnd(1)<0.06) c=8
+			if (rnd(1)<gleam) c=8
 			local to=get_cached_vec2(3)
 			to:set(dest):scale(1-alpha)
 			o_d:set(origin):scale(alpha):add(to)
