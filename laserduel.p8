@@ -497,6 +497,8 @@ function setup_lasers()
  attrs.aim_acc=0.0001
  attrs.aim_drag=0.99925
  attrs.aim_brake=0.9
+ attrs.reload_ticks=60
+ attrs.discharge_ticks=40
 	lasers.attrs=attrs
 end
 
@@ -504,7 +506,9 @@ function make_laser(index,aim)
 	local laser={
 		aim=aim,
 		aim_speed=0,
-		trigger=false,
+		discharging=false,
+		beam_active=false,
+		ticks=0,
 		index=index,
 		attrs=lasers.attrs
 	}
@@ -520,27 +524,39 @@ end
 function update_laser(laser)
 	local attrs=lasers.attrs
 	local la=attrs.aim_acc
- local index=laser.index-1
- local ❎=btn(❎,index)
- local 🅾️=btn(🅾️,index)
- local speed=laser.aim_speed
- acc=0
- if (❎) acc-=la
- if (🅾️) acc+=la
- local drag=attrs.aim_brake
- if acc~=0 and acc*speed>=0 then
- 	drag=attrs.aim_drag
- end
- speed+=acc
- speed*=drag
- if (speed == laser.aim_speed) speed=0
- laser.aim_speed=speed
- laser.aim+=speed
-	if (laser.trigger) then
-		laser.trigger=❎ or 🅾️
-	else
-		if (❎ and 🅾️) laser.trigger=true sfx(0)
+	local index=laser.index-1
+	local ❎=btn(❎,index)
+	local 🅾️=btn(🅾️,index)
+	local speed=laser.aim_speed
+	acc=0
+	if (❎) acc-=la
+	if (🅾️) acc+=la
+	local drag=attrs.aim_brake
+	if acc~=0 and acc*speed>=0 then
+		drag=attrs.aim_drag
 	end
+	speed+=acc
+	speed*=drag
+	if (speed == laser.aim_speed) speed=0
+	laser.aim_speed=speed
+	laser.aim+=speed
+	if(laser.ticks <= 0) then
+		if (laser.discharging) then
+			laser.discharging=false
+			laser.ticks=attrs.reload_ticks
+		else
+			if (❎ and 🅾️) then
+				laser.discharging=true
+				sfx(0)
+				laser.ticks=attrs.discharge_ticks
+			end
+		end
+	else
+		laser.ticks-=1
+	end
+	local ticks_mod = laser.ticks % 8
+	laser.beam_active = laser.discharging and ticks_mod>=3
+	if (laser.discharging and ticks_mod==7) sfx(0)
 end
 
 function compute_hit(laser,col)
@@ -587,7 +603,7 @@ function update_laser_hit(laser)
 	for i=1,#asteroids do
 		compute_hit(laser,asteroids[i])
 	end
-	if (not laser.trigger) return
+	if (not laser.beam_active) return
 	local hit_object=hit.object
 	if (not hit_object or not hit_object.on_hit) return
 	hit_object:on_hit(hit)
@@ -611,12 +627,12 @@ function draw_laser(laser)
 	local dest=get_cached_vec2(1)
 	if (laser.hit.object) then
 	 dest:set(laser.hit.point)
-	 if (laser.trigger) spawn_hit_particles(laser.hit,laser.index)
+	 if (laser.beam_active) spawn_hit_particles(laser.hit,laser.index)
 	else
 		dest:set_arg(laser.aim)
 			:scale(180):add(origin)
 	end
-	if laser.trigger then
+	if laser.beam_active then
 		line(origin.x,origin.y,dest.x,dest.y,8)
 		circfill(dest.x,dest.y,2,8)
 	else
