@@ -831,9 +831,9 @@ end
 local frame=0
 function process_particles()
 	frame+=1
-	local frame_mod=frame%2	--Particle collision are done at half tick rate
+	local frame_mod=frame%3	--Particle collision are done at half tick rate
 	for index=1,active_particles do
-		if (frame_mod==(index%2)) then
+		if (frame_mod==(index%3)) then
 			local part=particles[index]
 			local ix,iy=grid_coords(part.pos)
 			local cellid=hash_cell(ix,iy)
