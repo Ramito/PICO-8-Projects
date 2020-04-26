@@ -113,15 +113,29 @@ function on_ufo_hit(ufo,hit)
 		pos:add(ufo.pos)
 		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.3))
 		vel:add(ufo.vel)
-		make_particle(pos,vel,ufo.index,30+rnd(800))
+		make_spark_particle(pos,vel,ufo.index)
 	end
 	ufo_respawn_queue[ufo.index]=600
 end
 
 function on_asteroid_hit(ast,hit)
-	local kill_prob=0.06*hit.angle*hit.angle
+	local kill_prob=0.1*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	del(asteroids,ast)
+	
+	local radius=get_radius(ast)
+	local particles=2.25*radius*radius
+	local p_i=flr(rnd(#random_arg_vec2-particles))
+	local v_i=flr(rnd(#random_arg_vec2-particles))
+	for i=1,particles do
+		local normpos=random_arg_vec2[p_i+i]
+		local pos=get_cached_vec2(1):set(normpos)
+		pos:scale(rnd(radius))
+		pos:add(ast.pos)
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.05))
+		vel:add(ast.vel)
+		make_asteroid_particle(pos,vel,1,60+rnd(2000))
+	end
 end
 
 local _vec2_cache={}
@@ -617,7 +631,7 @@ function spawn_hit_particles(hit,index)
 		local offset=get_cached_vec2(5):set(random_arg_vec2[1+rnd_i])
 		offset:scale(rnd(0.2))
 		vel:add(offset)
-		make_particle(hit.point,vel,index,rnd(300))
+		make_spark_particle(hit.point,vel,index)
 	end
 end
 
@@ -801,17 +815,28 @@ function create_part()
 		life=0,
 		pos=make_vec2(),
 		vel=make_vec2(),
-		palette=0
+		spark_palette=-1,
+		color=7
 	}
 	return part
 end
 
-function make_particle(pos,vel,palette,life)
+function make_spark_particle(pos,vel,palette)
 	local part=alloc_part()
-	part.life=flr(life),
+	part.life=30+rnd(800),
 	part.pos:set(pos)
 	part.vel:set(vel)
-	part.palette=palette
+	part.spark_palette=palette
+	part.color=7
+end
+
+function make_asteroid_particle(pos,vel)
+	local part=alloc_part()
+	part.life=30+rnd(800),
+	part.pos:set(pos)
+	part.vel:set(vel)
+	part.spark_palette=-1
+	part.color=5
 end
 
 function update_particles()
@@ -821,7 +846,7 @@ function update_particles()
 		part.life-=1
 		if part.life >= 0 then
 			part.pos:add(part.vel)
-			part.vel:scale(0.97225)
+			if (part.spark_palette > 0) part.vel:scale(0.97225)
 			i+=1
 		else
 			particles[i]=particles[active_particles]
@@ -888,7 +913,7 @@ function draw_pixel(x,y,color)
 	local x=flr(x+0.5)
 	if (x<0 or x>=128) return
 	local y=flr(y+0.5)
-	if (y<0 or y>=128)return
+	if (y<0 or y>=128) return
 	local xdiv=flr(x/2)
 	local xmod=x%2
 	color=(1+15*xmod)*color
@@ -899,16 +924,20 @@ end
 function draw_particles()
 	for i=1,active_particles do
 		local part = particles[i]
-		if (0.8>rnd(1)) then
-			local base_color = 8
-			local color_die=rnd(1)
-			if (color_die<0.1) then
-				base_color=14
-			elseif (color_die<0.75) then
-				base_color=2
+		if (part.spark_palette > 0) then
+			if (0.8>rnd(1)) then
+				local base_color = 8
+				local color_die=rnd(1)
+				if (color_die<0.1) then
+					base_color=14
+				elseif (color_die<0.75) then
+					base_color=2
+				end
+				local color = map_color(part.spark_palette,base_color)
+				draw_pixel(part.pos.x,part.pos.y,color)
 			end
-			local color = map_color(part.palette,base_color)
-			draw_pixel(part.pos.x,part.pos.y,color)
+		else
+			draw_pixel(part.pos.x,part.pos.y,part.color)
 		end
 	end
 end
