@@ -47,10 +47,10 @@ end
 function _draw()
 	cls(0)
 	draw_particles()
+	foreach(explosions,draw_explosion)
 	foreach(asteroids,draw_asteroid)
 	foreach(lasers,draw_laser)
 	foreach(live_ufos,draw_ufo)
-	foreach(explosions,draw_explosion)
 	rect(0,0,127,127,1)
 end
 
@@ -101,7 +101,7 @@ function on_ufo_hit(ufo,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
-	make_exp(ufo.pos,0,50,0.0025)
+	make_exp(ufo.pos,ufo.index)
 	local radius=get_radius(ufo)
 	local particles=85
 	local p_i=flr(rnd(#random_arg_vec2-particles))
@@ -367,12 +367,13 @@ end
 
 explosions={}
 
-function make_exp(pos,radius,max_radius,strength)
+function make_exp(pos,palette)
 	local expl={}
 	expl.pos=pos
-	expl.radius=radius
-	expl.max_radius=max_radius
-	expl.strength=strength
+	expl.radius=0
+	expl.max_radius=50
+	expl.strength=0.0025
+	expl.palette=palette
 	add(explosions,expl)
 	return expl
 end
@@ -391,8 +392,10 @@ function update_explosion(expl)
 end
 
 function draw_explosion(exp)
+	pal()
 	local pos=exp.pos
-	circ(pos.x,pos.y,exp.radius,10)
+	circfill(pos.x,pos.y,0.5*exp.radius,map_color(5,get_spark_base_color()))
+	circfill(pos.x,pos.y,0.25*exp.radius,map_color(exp.palette,get_spark_base_color()))
 end
 -->8
 --math
@@ -933,7 +936,7 @@ function part_vs_col(part,col)
 		part.vel:set(col.vel):add(dp)
 end
 
-local part_exp_str_mod=0.08
+local part_exp_str_mod=0.2
 function part_vs_exp(part,exp)
 	local radius=exp.radius
 	local dp=get_cached_vec2(1)
@@ -998,18 +1001,23 @@ function draw_large_pixel(x,y,color)
 	poke(0x6000+addr,color)
 end
 
+function get_spark_base_color()
+	local base_color = 8
+	local color_die=rnd(1)
+	if (color_die<0.19) then
+		base_color=14
+	elseif (color_die<0.3) then
+		base_color=2
+	end
+	return base_color
+end
+
 function draw_particles()
 	for i=1,active_particles do
 		local part = particles[i]
 		if (part.spark_palette > 0) then
 			if (0.825>rnd(1)) then
-				local base_color = 8
-				local color_die=rnd(1)
-				if (color_die<0.19) then
-					base_color=14
-				elseif (color_die<0.3) then
-					base_color=2
-				end
+				local base_color = get_spark_base_color()
 				local color = map_color(part.spark_palette,base_color)
 				if (0.175>rnd(1)) then
 					draw_large_pixel(part.pos.x,part.pos.y,color)
