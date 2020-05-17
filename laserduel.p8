@@ -948,9 +948,9 @@ function draw_pixel(x,y,color)
 end
 
 function draw_large_pixel(x,y,color)
-	local x=flr(x)
+	local x=flr(x+0.25)
 	if (x<0 or x>=127) return
-	local y=flr(y)
+	local y=flr(y+0.25)
 	if (y<0 or y>=127) return
 	local xdiv=flr(x/2)
 	color=17*color
