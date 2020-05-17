@@ -123,28 +123,46 @@ function on_asteroid_hit(ast,hit)
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	del(asteroids,ast)
 	
-	local radius=get_radius(ast)
-	local particles=1.8*radius*radius
+	local ast_rad=get_radius(ast)
+	local smaller = ast
+	local smaller_rad=0
+	local rad_accum=0
+	local consumed_area=0
+	while smaller and rad_accum<ast_rad do
+		local allowed_rad=ast_rad-rad_accum
+		smaller = create_smaller_asteroid(ast.pos.x,ast.pos.y,allowed_rad, rad_accum!=0)
+		if smaller then
+			smaller_rad=get_radius(smaller)
+			rad_accum+=smaller_rad
+			consumed_area+=(smaller_rad*smaller_rad)
+
+			local random=random_arg_vec2[flr(rnd(#random_arg_vec2))+1]
+			smaller.vel:set(random):scale(0.05):add(ast.vel)
+		end
+	end
+
+	local total_area=ast_rad*ast_rad
+	local particles=flr(0.75*(total_area - consumed_area)) + flr(rnd(4))
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
 		local normpos=random_arg_vec2[p_i+i]
 		local pos=get_cached_vec2(1):set(normpos)
-		pos:scale(rnd(radius))
+		pos:scale(rnd(ast_rad))
 		pos:add(ast.pos)
-		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.05))
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.025))
 		vel:add(ast.vel)
 		make_asteroid_particle(pos,vel,1,90+rnd(1500))
 	end
-	local sparks=0.75*radius*radius
+	local sparks=flr(0.25*total_area) + flr(rnd(2))
 	p_i=flr(rnd(#random_arg_vec2-sparks))
 	v_i=flr(rnd(#random_arg_vec2-sparks))
 	for i=1,sparks do
 		local normpos=random_arg_vec2[p_i+i]
 		local pos=get_cached_vec2(1):set(normpos)
-		pos:scale(rnd(radius))
+		pos:scale(rnd(ast_rad))
 		pos:add(ast.pos)
-		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.925))
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.95))
 		vel:add(ast.vel)
 		local palette=5
 		if (i>=0.8*sparks) palette=hit.index
@@ -722,11 +740,33 @@ function setup_asteroids()
 end
 
 function create_asteroid(x,y)
+	local prot_ind=flr(rnd(#ast_prot_map))+1
+	return create_asteroid_prot_ind(x,y,prot_ind)
+end
+
+function get_smaller_index(radius,allow_same)
+	local index=0
+	while ast_prot_map[index+1].radius<radius do
+		index+=1
+	end
+	while allow_same and ast_prot_map[index+1].radius==radius do
+		index+=1
+	end
+	return index
+end
+
+function create_smaller_asteroid(x,y,radius,allow_same)
+	local index = get_smaller_index(radius,allow_same)
+	if (index==0) return
+	local prot_ind=flr(rnd(index))+1
+	return create_asteroid_prot_ind(x,y,prot_ind)
+end
+
+function create_asteroid_prot_ind(x,y,prot_ind)
 	local pos=make_vec2(x,y)
 	local ast={}
 	ast.pos=pos
 	ast.vel=arg_vec2(rnd(1)):scale(0.08)
-	local prot_ind=flr(rnd(#ast_prot_map))+1
 	ast.attributes=ast_prot_map[prot_ind]
 	ast.on_hit=on_asteroid_hit
 	add(asteroids,ast)
