@@ -103,17 +103,13 @@ function on_ufo_hit(ufo,hit)
 	--note we pass ufo position. could cause issues if explosions moved
 	make_exp(ufo.pos,0,50,0.0025)
 	local radius=get_radius(ufo)
-	local particles=110
+	local particles=85
 	local p_i=flr(rnd(#random_arg_vec2-particles))
-	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
 		local normpos=random_arg_vec2[p_i+i]
 		local pos=get_cached_vec2(1):set(normpos)
-		pos:scale(rnd(radius))
 		pos:add(ufo.pos)
-		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.3))
-		vel:add(ufo.vel)
-		make_spark_particle(pos,vel,ufo.index)
+		make_spark_particle(pos,ufo.vel,ufo.index)
 	end
 	ufo_respawn_queue[ufo.index]=600
 end
@@ -911,8 +907,9 @@ function update_particles()
 		local part=particles[i]
 		part.life-=1
 		if part.life >= 0 then
-			part.pos:add(part.vel)
-			if (part.spark_palette > 0) part.vel:scale(0.9725)
+			local vel=part.vel
+			part.pos:add(vel)
+			vel:scale(1+sqrt(vel:dot(vel))*(-0.075))
 			i+=1
 		else
 			particles[i]=particles[active_particles]
