@@ -793,7 +793,7 @@ end
 
 local ast_offset=12
 function spawn_random_ast(time)
-	if (time%0.25!=0 or rnd(1)>=0.333) return
+	if (time%0.25!=0 or rnd(1)>=0.3) return
 	local side=rnd(1)
 	local loc=-ast_offset+(128+2*ast_offset)*rnd(1)
 	local pos=get_cached_vec2(1)
@@ -813,10 +813,10 @@ function spawn_random_ast(time)
 	end
 	axis+=(rnd(0.5)-0.25)
 	local vel=get_cached_vec2(2)
-	vel:set_arg(axis):scale(8.5+(rnd(0.25)+rnd(0.25)+rnd(0.25)+rnd(0.25))*7.0)
+	vel:set_arg(axis):scale(4.0+(rnd(0.25)+rnd(0.25)+rnd(0.25)+rnd(0.25))*5.5)
 	local ast=create_asteroid(pos.x,pos.y)
 	local radius=get_radius(ast)
-	ast.vel:set(vel):scale(1.0/(radius*radius*radius))
+	ast.vel:set(vel):scale(1.0/(radius*radius))
 end
 
 function update_asteroid(ast)
