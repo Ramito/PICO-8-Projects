@@ -132,8 +132,8 @@ function on_asteroid_hit(ast,hit)
 	local smaller_rad=0
 	local rad_accum=0
 	local consumed_area=0
-	while smaller and rad_accum<ast_rad do
-		local allowed_rad=ast_rad-rad_accum
+	while smaller and 0.6666*rad_accum<ast_rad do
+		local allowed_rad=ast_rad-0.6666*rad_accum
 		smaller = create_smaller_asteroid(0,0,allowed_rad, rad_accum!=0)
 		if smaller then
 			smaller_rad=get_radius(smaller)
@@ -149,7 +149,7 @@ function on_asteroid_hit(ast,hit)
 	end
 
 	local total_area=ast_rad*ast_rad
-	local particles=flr(0.9*(total_area - consumed_area)) + flr(rnd(4))
+	local particles=flr(1.1*(total_area - consumed_area)) + flr(rnd(4))
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
@@ -161,7 +161,7 @@ function on_asteroid_hit(ast,hit)
 		vel:add(ast.vel)
 		make_asteroid_particle(pos,vel,1,90+rnd(1500))
 	end
-	local sparks=flr(0.225*total_area) + flr(rnd(2))
+	local sparks=flr(0.22*total_area) + flr(rnd(2))
 	p_i=flr(rnd(#random_arg_vec2-sparks))
 	v_i=flr(rnd(#random_arg_vec2-sparks))
 	for i=1,sparks do
@@ -172,7 +172,7 @@ function on_asteroid_hit(ast,hit)
 		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(1.5))
 		vel:add(ast.vel)
 		local palette=5
-		if (i>=0.875*sparks) palette=hit.index
+		if (i>=0.9*sparks) palette=hit.index
 		make_spark_particle(pos,vel,palette)
 	end
 end
@@ -903,7 +903,7 @@ end
 
 function make_spark_particle(pos,vel,palette)
 	local part=alloc_part()
-	part.life=45+rnd(450),
+	part.life=120+rnd(300),
 	part.pos:set(pos)
 	part.vel:set(vel)
 	part.spark_palette=palette
@@ -912,7 +912,7 @@ end
 
 function make_asteroid_particle(pos,vel)
 	local part=alloc_part()
-	part.life=60+rnd(1200),
+	part.life=300+rnd(900),
 	part.pos:set(pos)
 	part.vel:set(vel)
 	part.spark_palette=-1
