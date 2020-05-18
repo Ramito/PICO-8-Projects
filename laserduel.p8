@@ -11,18 +11,25 @@ function _init()
 	live_ufos={}
 	ufo_respawn_queue={}
 	lasers={}
+	initialize_random()
+	setup_asteroids()
+	spawn_asteroids()
+	for i=1,450 do
+		clear_hash()
+		foreach(asteroids,update_asteroid)
+		hash_colliders(asteroids)
+		resolve_hash_collisions()
+		spawn_random_ast(i/60)
+	end
+	for i=1,1000 do
+		alloc_part(0)
+	end
 	setup_ufos()
 	setup_lasers()
 	create_ufo(32,32,-0.2)
 	create_ufo(96,32,0.7)
 	create_ufo(32,96,0.2)
 	create_ufo(96,96,-0.7)
-	setup_asteroids()
-	spawn_asteroids()
-	initialize_random()
-	for i=1,1000 do
-		alloc_part(0)
-	end
 end
 
 function _update60()
@@ -36,7 +43,7 @@ function _update60()
 	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
-	if (time()%0.25==0 and rnd(1)<0.3333) spawn_random_ast()
+	spawn_random_ast(time())
 --lasers
 	foreach(lasers,update_laser)
 	foreach(lasers,update_laser_hit)
@@ -115,22 +122,26 @@ function on_ufo_hit(ufo,hit)
 end
 
 function on_asteroid_hit(ast,hit)
-	local kill_prob=0.5*hit.angle*hit.angle
+	local kill_prob=0.45*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
 	del(asteroids,ast)
 	
 	local ast_rad=get_radius(ast)
+	
 	local smaller = ast
 	local smaller_rad=0
 	local rad_accum=0
 	local consumed_area=0
 	while smaller and rad_accum<ast_rad do
 		local allowed_rad=ast_rad-rad_accum
-		smaller = create_smaller_asteroid(ast.pos.x,ast.pos.y,allowed_rad, rad_accum!=0)
+		smaller = create_smaller_asteroid(0,0,allowed_rad, rad_accum!=0)
 		if smaller then
 			smaller_rad=get_radius(smaller)
 			rad_accum+=smaller_rad
 			consumed_area+=(smaller_rad*smaller_rad)
+
+			local random=random_arg_vec2[flr(rnd(#random_arg_vec2))+1]
+			smaller.pos:set(random):scale(rnd(ast_rad-smaller_rad)):add(ast.pos)
 
 			local random=random_arg_vec2[flr(rnd(#random_arg_vec2))+1]
 			smaller.vel:set(random):scale(0.05):add(ast.vel)
@@ -138,7 +149,7 @@ function on_asteroid_hit(ast,hit)
 	end
 
 	local total_area=ast_rad*ast_rad
-	local particles=flr(0.75*(total_area - consumed_area)) + flr(rnd(4))
+	local particles=flr(0.9*(total_area - consumed_area)) + flr(rnd(4))
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
@@ -150,7 +161,7 @@ function on_asteroid_hit(ast,hit)
 		vel:add(ast.vel)
 		make_asteroid_particle(pos,vel,1,90+rnd(1500))
 	end
-	local sparks=flr(0.25*total_area) + flr(rnd(2))
+	local sparks=flr(0.225*total_area) + flr(rnd(2))
 	p_i=flr(rnd(#random_arg_vec2-sparks))
 	v_i=flr(rnd(#random_arg_vec2-sparks))
 	for i=1,sparks do
@@ -158,10 +169,10 @@ function on_asteroid_hit(ast,hit)
 		local pos=get_cached_vec2(1):set(normpos)
 		pos:scale(rnd(ast_rad))
 		pos:add(ast.pos)
-		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(0.95))
+		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(1.5))
 		vel:add(ast.vel)
 		local palette=5
-		if (i>=0.8*sparks) palette=hit.index
+		if (i>=0.875*sparks) palette=hit.index
 		make_spark_particle(pos,vel,palette)
 	end
 end
@@ -765,7 +776,7 @@ function create_asteroid_prot_ind(x,y,prot_ind)
 	local pos=make_vec2(x,y)
 	local ast={}
 	ast.pos=pos
-	ast.vel=arg_vec2(rnd(1)):scale(0.08)
+	ast.vel=arg_vec2(rnd(1)):scale(0.1)
 	ast.attributes=ast_prot_map[prot_ind]
 	ast.on_hit=on_asteroid_hit
 	add(asteroids,ast)
@@ -780,33 +791,43 @@ function spawn_asteroids()
 	end
 end
 
-function spawn_random_ast()
-	local loc=rnd(1)
-	local pos
+local ast_offset=12
+function spawn_random_ast(time)
+	if (time%0.25!=0 or rnd(1)>=0.333) return
+	local side=rnd(1)
+	local loc=-ast_offset+(128+2*ast_offset)*rnd(1)
+	local pos=get_cached_vec2(1)
 	local axis
-	if (loc<0.25) then
-		pos=make_vec2(132,4*128*loc)
+	if (side<0.25) then
+		pos:set_coords(128+ast_offset,loc)
 		axis=0.5
-	elseif (loc<0.5) then
-		pos=make_vec2(4*128*(loc-0.25),-4)
+	elseif (side<0.5) then
+		pos:set_coords(loc,-ast_offset)
 		axis=0.75
-	elseif (loc<0.75) then
-		pos=make_vec2(-4,4*128*(loc-0.5))
+	elseif (side<0.75) then
+		pos:set_coords(-ast_offset,loc)
 		axis=0
 	else
-		pos=make_vec2(4*128*(loc-0.75),132)
+		pos:set_coords(loc,128+ast_offset)
 		axis=0.25
 	end
-	axis+=(rnd(0.4)-0.2)
-	local vel=arg_vec2(axis):scale(0.025+rnd(0.3))
-	create_asteroid(pos.x,pos.y).vel=vel
+	axis+=(rnd(0.5)-0.25)
+	local vel=get_cached_vec2(2)
+	vel:set_arg(axis):scale(8.5+(rnd(0.25)+rnd(0.25)+rnd(0.25)+rnd(0.25))*7.0)
+	local ast=create_asteroid(pos.x,pos.y)
+	local radius=get_radius(ast)
+	ast.vel:set(vel):scale(1.0/(radius*radius*radius))
 end
 
 function update_asteroid(ast)
 	ast.pos:add(ast.vel)
-	local screen_dist_sq=screen_rect:vec2_dist_sq(ast.pos)
-	local r_sq=ast.attributes.radius*ast.attributes.radius
-	if (screen_dist_sq>4*r_sq) then
+	local ast_pos=ast.pos
+	local diff=screen_rect:closest_to(ast_pos):sub(ast_pos)
+	local dist_sq=diff:dot(diff)
+	if (dist==0) return
+	if (diff:dot(ast.vel)>=0) return
+	local ast_r=get_radius(ast)
+	if (dist_sq>4*ast_r*ast_r) then
 		del(asteroids,ast)
 	end
 end
@@ -882,20 +903,21 @@ end
 
 function make_spark_particle(pos,vel,palette)
 	local part=alloc_part()
-	part.life=45+rnd(500),
+	part.life=45+rnd(450),
 	part.pos:set(pos)
 	part.vel:set(vel)
 	part.spark_palette=palette
-	part.color=7
+	part.color=8
 end
 
 function make_asteroid_particle(pos,vel)
 	local part=alloc_part()
-	part.life=60+rnd(750),
+	part.life=60+rnd(1200),
 	part.pos:set(pos)
 	part.vel:set(vel)
 	part.spark_palette=-1
-	part.large=0.3333>rnd(1)
+	part.large=0.425>rnd(1)
+	if (part.large) part.life*=(0.5-rnd(0.45))
 	color=13
 	if (0.25>rnd(1)) then
 		color=5
@@ -912,7 +934,7 @@ function update_particles()
 		if part.life >= 0 then
 			local vel=part.vel
 			part.pos:add(vel)
-			vel:scale(1+sqrt(vel:dot(vel))*(-0.075))
+			vel:scale(1+sqrt(vel:dot(vel))*(-0.035))
 			i+=1
 		else
 			particles[i]=particles[active_particles]
@@ -936,7 +958,7 @@ function part_vs_col(part,col)
 		part.vel:set(col.vel):add(dp)
 end
 
-local part_exp_str_mod=0.2
+local part_exp_str_mod=0.22
 function part_vs_exp(part,exp)
 	local radius=exp.radius
 	local dp=get_cached_vec2(1)
@@ -1027,7 +1049,7 @@ function draw_particles()
 			end
 		else
 			if (part.large) then
-				if (0.65>rnd(1))draw_large_pixel(part.pos.x,part.pos.y,part.color)
+				if (0.5>=rnd(1))draw_large_pixel(part.pos.x,part.pos.y,part.color)
 			else
 				draw_pixel(part.pos.x,part.pos.y,part.color)
 			end
