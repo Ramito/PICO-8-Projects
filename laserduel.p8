@@ -43,6 +43,7 @@ function _update60()
 	hash_colliders(live_ufos)
 	hash_colliders(asteroids)
 	resolve_hash_collisions()
+	resolve_expl_vs_colliders()
 	spawn_random_ast(time())
 --lasers
 	foreach(lasers,update_laser)
@@ -64,11 +65,11 @@ end
 -->8
 --ufo factory
 
+local ufo_drag=-0.0225
 function setup_ufos()
 --constants
  local attributes = {}
 	attributes.acc=0.0175
-	attributes.drag=-0.0225
 	attributes.radius=2.5
 	ufos.attributes=attributes
 end
@@ -84,6 +85,7 @@ function create_ufo(x,y,aim)
 	ufo.vel=make_vec2(0,0)
 	--hit callback
 	ufo.on_hit=on_ufo_hit
+	ufo.on_exp=on_exp_hit_ufo
 	--position is set on spawn!
 	--spawn in world
 	spawn_ufo(ufo.index,x,y,aim)
@@ -103,12 +105,10 @@ end
 -->8
 --ufo sim
 
-function on_ufo_hit(ufo,hit)
-	local kill_prob=0.2*hit.angle*hit.angle
-	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
+function destroy_ufo(ufo)
 	despawn_ufo(ufo.index)
 	--note we pass ufo position. could cause issues if explosions moved
-	make_exp(ufo.pos,ufo.index)
+	make_exp(ufo.pos,ufo.vel,ufo.index)
 	local radius=get_radius(ufo)
 	local particles=85
 	local p_i=flr(rnd(#random_arg_vec2-particles))
@@ -121,13 +121,40 @@ function on_ufo_hit(ufo,hit)
 	ufo_respawn_queue[ufo.index]=600
 end
 
-function on_asteroid_hit(ast,hit)
-	local kill_prob=0.45*hit.angle*hit.angle
+function on_ufo_hit(ufo,hit)
+	local kill_prob=0.2*hit.angle*hit.angle
 	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
+	destroy_ufo(ufo)
+end
+
+local exp_impact_prop=0.5
+local exp_vs_col_str=0.325
+function explosion_vs_collider(exp,col)
+	local diff=get_cached_vec2(1):set(col.pos):sub(exp.pos)
+	local dist_sq=diff:dot(diff)
+	local exp_rad=exp.radius
+	local col_rad=get_radius(col)
+	local rad_sum=exp_rad+col_rad
+	if dist_sq<=rad_sum*rad_sum then
+		local push=exp_vs_col_str*explode_strength(exp)
+		diff:scale(push/(sqrt(dist_sq)*col_rad*col_rad*col_rad))
+		col.vel:add(diff)
+		local hit_dist=exp_impact_prop*exp_rad+col_rad
+		if (col.on_exp and dist_sq<=hit_dist*hit_dist and 0.1>rnd(1)) col:on_exp(exp)
+	end
+end
+
+function on_exp_hit_ufo(ufo,exp)
+	destroy_ufo(ufo)
+end
+
+function on_exp_hit_asteroid(ast,exp)
+	destroy_asteroid(ast,-1)
+end
+
+function destroy_asteroid(ast, spark_index)
 	del(asteroids,ast)
-	
 	local ast_rad=get_radius(ast)
-	
 	local smaller = ast
 	local smaller_rad=0
 	local rad_accum=0
@@ -147,7 +174,6 @@ function on_asteroid_hit(ast,hit)
 			smaller.vel:set(random):scale(0.05):add(ast.vel)
 		end
 	end
-
 	local total_area=ast_rad*ast_rad
 	local particles=flr(1.1*(total_area - consumed_area)) + flr(rnd(4))
 	local p_i=flr(rnd(#random_arg_vec2-particles))
@@ -161,6 +187,7 @@ function on_asteroid_hit(ast,hit)
 		vel:add(ast.vel)
 		make_asteroid_particle(pos,vel,1,90+rnd(1500))
 	end
+	if (spark_index<1) return
 	local sparks=flr(0.22*total_area) + flr(rnd(2))
 	p_i=flr(rnd(#random_arg_vec2-sparks))
 	v_i=flr(rnd(#random_arg_vec2-sparks))
@@ -172,9 +199,15 @@ function on_asteroid_hit(ast,hit)
 		local vel=get_cached_vec2(2):set(random_arg_vec2[v_i+i]):scale(rnd(1.5))
 		vel:add(ast.vel)
 		local palette=5
-		if (i>=0.9*sparks) palette=hit.index
+		if (i>=0.9*sparks) palette=spark_index
 		make_spark_particle(pos,vel,palette)
 	end
+end
+
+function on_asteroid_hit(ast,hit)
+	local kill_prob=0.45*hit.angle*hit.angle
+	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
+	destroy_asteroid(ast, hit.index)
 end
 
 local _vec2_cache={}
@@ -191,7 +224,7 @@ end
 
 function integrate(ufo)
 	local sq_vel=ufo.vel:dot(ufo.vel)
-	ufo.vel:scale(1+sqrt(sq_vel)*ufo.attributes.drag)
+	ufo.vel:scale(1+sqrt(sq_vel)*ufo_drag)
 	ufo.pos:add(ufo.vel)
 end
 
@@ -367,6 +400,20 @@ function resolve_hash_collisions()
 		end
 	end
 end
+
+function resolve_expl_vs_colliders()
+	for id,ecell in pairs(exp_sp_hash) do
+		ccell=col_sp_hash[id]
+		if (ccell) then
+			for i=1,#ecell do
+				local ei=ecell[i]
+				for j=1,#ccell do
+					explosion_vs_collider(exp_hash_id[ei],col_hash_id[ccell[j]])
+				end
+			end
+		end
+	end
+end
 -->8
 --ufo render & explosions
 
@@ -378,9 +425,10 @@ end
 
 explosions={}
 
-function make_exp(pos,palette)
+function make_exp(pos,vel,palette)
 	local expl={}
 	expl.pos=pos
+	expl.vel=vel
 	expl.radius=0
 	expl.max_radius=50
 	expl.strength=0.0025
@@ -399,6 +447,7 @@ end
 function update_explosion(expl)
 	local growth=explode_strength(expl)
 	if (growth<=0.25) del(explosions,expl) return
+	integrate(expl)
 	expl.radius+=growth
 end
 
@@ -779,6 +828,7 @@ function create_asteroid_prot_ind(x,y,prot_ind)
 	ast.vel=arg_vec2(rnd(1)):scale(0.1)
 	ast.attributes=ast_prot_map[prot_ind]
 	ast.on_hit=on_asteroid_hit
+	ast.on_exp=on_exp_hit_asteroid
 	add(asteroids,ast)
 	return ast
 end
@@ -791,9 +841,10 @@ function spawn_asteroids()
 	end
 end
 
+local random_detail=16
 local ast_offset=12
 function spawn_random_ast(time)
-	if (time%0.25!=0 or rnd(1)>=0.3) return
+	if (time%0.125!=0 or rnd(1)>=0.375) return
 	local side=rnd(1)
 	local loc=-ast_offset+(128+2*ast_offset)*rnd(1)
 	local pos=get_cached_vec2(1)
@@ -813,7 +864,11 @@ function spawn_random_ast(time)
 	end
 	axis+=(rnd(0.5)-0.25)
 	local vel=get_cached_vec2(2)
-	vel:set_arg(axis):scale(4.0+(rnd(0.25)+rnd(0.25)+rnd(0.25)+rnd(0.25))*5.5)
+	local dieroll=0
+	for i=1,random_detail do
+		dieroll+=rnd(1/random_detail)
+	end
+	vel:set_arg(axis):scale(9.5*dieroll)
 	local ast=create_asteroid(pos.x,pos.y)
 	local radius=get_radius(ast)
 	ast.vel:set(vel):scale(1.0/(radius*radius))
