@@ -330,8 +330,8 @@ col_sp_hash={}
 exp_hash_id={}
 exp_sp_hash={}
 
-local grid_offset=8
-local grid_cells_side=12
+local grid_offset=16
+local grid_cells_side=16
 
 function coord_to_grid(coord)
 	return grid_cells_side*(coord+grid_offset)/(128+2*grid_offset)
