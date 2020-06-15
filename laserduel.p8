@@ -81,8 +81,6 @@ function create_ufo(x,y,aim)
 	ufo.index=#ufos
 	--attributes
 	ufo.attributes=ufos.attributes
-	--velocity
-	ufo.vel=make_vec2(0,0)
 	--hit callback
 	ufo.on_hit=on_ufo_hit
 	ufo.on_exp=on_exp_hit_ufo
@@ -94,6 +92,8 @@ end
 function spawn_ufo(index,x,y,aim)
 	local ufo=ufos[index]
 	ufo.pos=make_vec2(x,y)
+	ufo.vel=make_vec2(0,0)
+	ufo.integrity=1.0
 	make_laser(index,aim)
 	add(live_ufos,ufo)
 end
@@ -122,8 +122,8 @@ function destroy_ufo(ufo)
 end
 
 function on_ufo_hit(ufo,hit)
-	local kill_prob=0.2*hit.angle*hit.angle
-	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
+	ufo.integrity-=(0.05*hit.angle)
+	if (ufo.integrity>0) return
 	destroy_ufo(ufo)
 end
 
@@ -288,7 +288,9 @@ function collide(u_1,u_2)
 end
 
 function update_ufo(ufo)
- local index=ufo.index-1
+	ufo.integrity+=0.001
+	if (ufo.integrity>1) ufo.integrity=1
+ 	local index=ufo.index-1
  --x input
 	local x_arg=0
 	if (btn(➡️,index)) x_arg+=1
@@ -420,7 +422,22 @@ end
 function draw_ufo(ufo)
 	apply_pal(ufo.index)
 	local r=ufo.attributes.radius
-	spr(1,flr(ufo.pos.x-r+0.5),flr(ufo.pos.y-r+0.5))
+	local ix=flr(ufo.pos.x-r+0.5)
+	local iy=flr(ufo.pos.y-r+0.5)
+	spr(1,ix,iy)
+	local offset=4
+	local from_x=ix-offset+r
+	local raw_length=2*ufo.integrity*offset
+	local bar_length=flr(raw_length)
+	local to_x=from_x+bar_length
+	local bar_y=iy+offset+r
+	line(from_x,bar_y,to_x,bar_y,8)
+	local bleed=raw_length-bar_length
+	if (bleed>=0.925) then 
+		pset(to_x+1,bar_y,14)
+	elseif (bleed>=0.25) then
+		pset(to_x+1,bar_y,2)
+	end
 end
 
 explosions={}
