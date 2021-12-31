@@ -17,11 +17,15 @@ function _draw()
  for dog in all(dogs) do
   draw_dog(dog)
  end
+ for dog in all(exit_dogs) do
+  draw_dog(dog)
+ end
 end
 -->8
 --doggy
 
 dogs={}
+exit_dogs={}
 
 function init_dog(player)
  local dog = {}
@@ -41,40 +45,27 @@ end
 
 function update_dogs()
  for dog in all(dogs) do
-  update_dog(dog)
+  update_dog_input(dog)
+  update_dog_move(dog)
+  dog_bounds(dog)
+ end
+ for dog in all(exit_dogs) do
+  update_dog_move(dog)
  end
 end
 
-function update_dog(dog)
- update_bark(dog)
- update_dog_jump(dog)
- update_dog_move(dog)
- dog_bounds(dog)
-end
-
-function update_bark(dog)
+function update_dog_input(dog)
+ --bark
  if (btnp(❎,dog.player)) sfx(1)
-end
-
-function update_dog_jump(dog)
+ --jump input
  if (dog.h==0) then
   if btnp(🅾️,dog.player) then
    sfx(2)
    dog.dh=dog.jump
   end
  end
- if dog.dh!=0 or dog.h!=0 then
-  dog.h+=(dog.dh/60)
-  dog.dh-=100/60
- end
- if (dog.h<0) then
-  dog.h=0
-  dog.dh=0
- end
-end
-
-function update_dog_move(dog)
-local dir_x=0
+ --move input
+ local dir_x=0
  local dir_y=0
  if (btn(⬅️,dog.player)) dir_x+=-1
  if (btn(➡️,dog.player)) dir_x+=1
@@ -84,26 +75,66 @@ local dir_x=0
  if (norm==0) then
   dog.dx=0
   dog.dy=0
-  return
+ else
+  dog.anim+=1
+  if (dog.anim%10==0) sfx(0)
+  norm=1/(60*sqrt(norm))
+  dog.dx=dir_x*dog.speed*norm
+  dog.dy=dir_y*dog.speed*norm
  end
- dog.anim+=1
- if (dog.anim%10==0) sfx(0)
- norm=1/(60*sqrt(norm))
- dir_x=dir_x*dog.speed*norm
- dir_y=dir_y*dog.speed*norm
- dog.dx=dir_x
- dog.dy=dir_y
- dog.x+=dir_x
- dog.y+=dir_y
- if (dir_x>0) dog.direction=0
- if (dir_x<0) dog.direction=1
+end
+
+function update_dog_move(dog)
+ if dog.dh!=0 or dog.h!=0 then
+  dog.h+=(dog.dh/60)
+  dog.dh-=100/60
+ end
+ if (dog.h<0) then
+  dog.h=0
+  dog.dh=0
+ end
+ dog.x+=dog.dx
+ dog.y+=dog.dy
+ if (dog.dx>0) dog.direction=0
+ if (dog.dx<0) dog.direction=1
 end
 
 function dog_bounds(dog)
- if (dog.x<0) dog.x=0
- if (dog.y<0) dog.y=0
- if (dog.x>15*8) dog.x=15*8
- if (dog.y>15*8) dog.y=15*8
+ local top_edge=15*8
+ local jumping=dog.dh>0
+ local exit = false
+ if dog.x<0 then
+  if jumping and dog.dx<0 then
+   exit = true
+  else
+   dog.x=0
+  end
+ end
+ if dog.y<0 then
+  if jumping and dog.dy<0 then
+   exit = true
+  else
+   dog.y=0
+  end
+ end
+ if dog.x>top_edge then
+  if jumping and dog.dx>0 then
+   exit = true
+  else
+   dog.x=top_edge
+  end
+ end
+ if dog.y>15*8 then
+  if jumping and dog.dy>0 then
+   exit = true
+  else
+   dog.y=top_edge
+  end
+ end
+ if exit then
+  add(exit_dogs,dog)
+  del(dogs,dog)
+ end
 end
 
 function draw_dog(dog)
