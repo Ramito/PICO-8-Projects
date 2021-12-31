@@ -20,12 +20,17 @@ function _draw()
  for dog in all(exit_dogs) do
   draw_dog(dog)
  end
+ for dog in all(enter_dogs) do
+  draw_dog(dog)
+  print("e",64,64)
+ end
 end
 -->8
 --doggy
 
 dogs={}
 exit_dogs={}
+enter_dogs={}
 
 function init_dog(player)
  local dog = {}
@@ -41,6 +46,19 @@ function init_dog(player)
  dog.direction=player%2
  dog.player=player
  add(dogs,dog)
+ return dog
+end
+
+function enter_dog(player)
+ local dog=init_dog(player)
+ local mult=1
+ local offset=-32
+ if (dog.player==1) mult=-1
+ dog.x+=mult*offset
+ dog.dx=mult*dog.speed
+ dog.dh=dog.jump
+ add(enter_dogs,dog)
+ del(dogs,dog)
 end
 
 function update_dogs()
@@ -51,6 +69,11 @@ function update_dogs()
  end
  for dog in all(exit_dogs) do
   update_dog_move(dog)
+  dog_exit_bounds(dog)
+ end
+ for dog in all(enter_dogs) do
+  update_dog_move(dog)
+  dog_enter_play(dog)
  end
 end
 
@@ -78,7 +101,7 @@ function update_dog_input(dog)
  else
   dog.anim+=1
   if (dog.anim%10==0) sfx(0)
-  norm=1/(60*sqrt(norm))
+  norm=1/sqrt(norm)
   dog.dx=dir_x*dog.speed*norm
   dog.dy=dir_y*dog.speed*norm
  end
@@ -93,8 +116,8 @@ function update_dog_move(dog)
   dog.h=0
   dog.dh=0
  end
- dog.x+=dog.dx
- dog.y+=dog.dy
+ dog.x+=dog.dx/60
+ dog.y+=dog.dy/60
  if (dog.dx>0) dog.direction=0
  if (dog.dx<0) dog.direction=1
 end
@@ -135,6 +158,28 @@ function dog_bounds(dog)
   add(exit_dogs,dog)
   del(dogs,dog)
  end
+end
+
+function dog_exit_bounds(dog)
+ local top=16*8
+ local bottom=-8
+ local done=
+  dog.x<bottom or
+  dog.y<bottom or
+  dog.x>top or
+  dog.y>top
+ if done then
+  del(exit_dogs,dog)
+  enter_dog(dog.player)
+ end
+end
+
+function dog_enter_play(dog)
+ if (dog.h>0) return
+ dog.h=0
+ dog.dh=0
+ add(dogs,dog)
+ del(enter_dogs,dog)
 end
 
 function draw_dog(dog)
