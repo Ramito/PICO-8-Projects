@@ -5,9 +5,9 @@ gravity=100
 dt=1/60
 
 function _init()
+ poke(0x5f5c, 255)
  init_dog(0)
  init_dog(1)
- make_ball()
 end
 
 function _update60()
@@ -232,13 +232,49 @@ fence_bottom_v=8
 function make_ball()
  ball={}
  ball.x=0
- ball.y=64
- ball.dx=20
- ball.dy=20
- ball.h=4
+ ball.y=0
+ ball.dx=0
+ ball.dy=0
+ ball.h=10
  ball.dh=0
+ ball.color=1
  ball.over_fence=true
  add(balls,ball)
+ return ball
+end
+
+function randomize_ball(ball)
+ local speed=5+rnd(45)
+ local lateral=-15+rnd(31)
+ local vertical=5+rnd(110)
+ ball.dh=vertical
+ local side=rnd(512)
+ if side<128 then
+  ball.x=side
+  ball.y=0
+  ball.dx=lateral
+  ball.dy=speed
+ elseif side<256 then
+  ball.x=side-128
+  ball.y=128
+  ball.dx=lateral
+  ball.dy=-speed
+ elseif side<384 then
+  ball.x=0
+  ball.y=side-256
+  ball.dx=speed
+  ball.dy=lateral
+ else
+  ball.x=128
+  ball.y=side-384
+  ball.dx=-speed
+  ball.dy=lateral
+ end
+ local rnd_clr=flr(rnd(4))
+ if (rnd_clr==0) ball.color=1
+ if (rnd_clr==1) ball.color=9
+ if (rnd_clr==2) ball.color=12
+ if (rnd_clr==3) ball.color=14
 end
 
 function ball_over_fence(ball)
@@ -269,7 +305,7 @@ function update_balls()
   if (ball.over_fence and fence_now) height = 4
   if ball.h<height+ball_radius then
    ball.h=height+ball_radius
-   ball.dh*=-0.85
+   ball.dh*=-0.875
   end
   if not fence_now and ball.h<4 then
    if ball_x_collide(ball) then
@@ -282,13 +318,28 @@ function update_balls()
    end
   end
   ball.over_fence=fence_now
+  for dog in all(dogs) do
+   if (can_catch_ball(dog,ball)) del(balls,ball)
+  end
+  if (ball.x<0) del(balls,ball)
+  if (ball.y<0) del(balls,ball)
+  if (ball.x>128) del(balls,ball)
+  if (ball.y>128) del(balls,ball)
  end
+ if (#balls==0 and rnd(250)<=1) randomize_ball(make_ball())
+end
+
+function can_catch_ball(dog,ball)
+ if (ball.x<dog.x or ball.x>dog.x+8) return false
+ if (ball.y<dog.y or ball.y>dog.y+8) return false
+ if (ball.h<dog.h or ball.h>dog.h+4) return false
+ return true
 end
 
 function draw_balls()
  for ball in all(balls) do
   line(ball.x-ball_radius,ball.y,ball.x+ball_radius,ball.y,3)
-  circfill(ball.x,ball.y-ball.h,1,1)
+  circfill(ball.x,ball.y-ball.h,1,ball.color)
  end
 end
 __gfx__
@@ -520,6 +571,6 @@ __map__
 2e20202020202020222320202021201e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 2d1f1f1f1f1f1f1f1f1f1f1f1f1f1f1d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-4a0100000d0100e0300f0401003011010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-50010000155101a5301c5501e560205601a5500c51000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+4a0100000d0100e0200f0301002011010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+50010000155101a5401c5601e570205701a5600c52000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000400000d0500d0500e0501005012050160502305025050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
