@@ -12,8 +12,7 @@ end
 
 function _update60()
  update_dogs()
- integrate_balls()
- bounce_balls()
+ update_balls()
 end
 
 function _draw()
@@ -130,7 +129,8 @@ end
 
 function dog_bounds(dog)
  local top=14*8+4
- local bottom=8-4
+ local top_v=15*8
+ local bottom=4
  local jumping=dog.dh>0
  local exit = false
  if dog.x<bottom then
@@ -154,11 +154,11 @@ function dog_bounds(dog)
    dog.x=top
   end
  end
- if dog.y>top then
+ if dog.y>top_v then
   if jumping and dog.dy>0 then
    exit = true
   else
-   dog.y=top
+   dog.y=top_v
   end
  end
  if exit then
@@ -224,40 +224,63 @@ end
 ball_radius=1
 balls={}
 
+fence_top=16*8-4
+fence_top_v=16*8-2
+fence_bottom=4
+
 function make_ball()
  ball={}
  ball.x=0
  ball.y=64
- ball.dx=20
- ball.dy=0
- ball.h=5
- ball.dh=5
+ ball.dx=8
+ ball.dy=10
+ ball.h=4
+ ball.dh=0
+ ball.over_fence=true
  add(balls,ball)
 end
 
-function integrate_balls()
+function ball_over_fence(ball)
+ return ball.x<fence_bottom or
+        ball.y<fence_bottom or
+        ball.x>fence_top or
+        ball.y>fence_top_v
+end
+
+function ball_x_collide(ball)
+ return ball.dx<0 and ball.x-ball_radius<fence_bottom
+  or ball.dx>0 and ball.x+ball_radius>fence_top
+end
+
+function ball_y_collide(ball)
+ return ball.dy<0 and ball.y-ball_radius<fence_bottom
+  or ball.dy>0 and ball.y+ball_radius>fence_top_v
+end
+
+function update_balls()
  for ball in all(balls) do
   ball.x+=ball.dx*dt
   ball.y+=ball.dy*dt
   ball.h+=ball.dh*dt
   ball.dh-=gravity*dt
-  if ball.h<ball_radius then
-   ball.h=ball_radius
-   ball.dh=-ball.dh
+  local height=0
+  local fence_now=ball_over_fence(ball)
+  if (ball.over_fence and fence_now) height = 4
+  if ball.h<height+ball_radius then
+   ball.h=height+ball_radius
+   ball.dh*=-0.95
   end
- end
-end
-
-function bounce_balls()
- local top=14*8+4
- local bottom=8-4
- for ball in all(balls) do
-  if ball.h<4 then
-   local bounce_x=
-    ball.x<bottom-ball_radius
-    or ball.x>top+ball_radius
-   if (bounce_x) ball.dx=-ball.dx
+  if not fence_now and ball.h<4 then
+   if ball_x_collide(ball) then
+     ball.dx*=-1
+     ball.x+=ball.dx*dt
+   end
+   if ball_y_collide(ball) then
+     ball.dy*=-1
+     ball.y+=ball.dy*dt
+   end
   end
+  ball.over_fence=fence_now
  end
 end
 
