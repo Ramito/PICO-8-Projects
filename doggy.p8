@@ -35,7 +35,7 @@ enter_dogs={}
 function init_dog(player)
  local dog = {}
  dog.speed=40
- dog.jump=50
+ dog.jump=40
  dog.x=player*15*8
  dog.y=player*15*8
  dog.h=0
@@ -45,14 +45,22 @@ function init_dog(player)
  dog.anim=0
  dog.direction=player%2
  dog.player=player
+ dog.character=0
  add(dogs,dog)
  return dog
 end
 
-function enter_dog(player)
+function make_cat(dog)
+ dog.speed=60
+ dog.jump=50
+ dog.character=127
+end
+
+function enter_dog(player,cat)
  local dog=init_dog(player)
  local mult=1
  local offset=-32
+ if (cat) make_cat(dog)
  if (dog.player==1) mult=-1
  dog.x+=mult*offset
  dog.dx=mult*dog.speed
@@ -169,8 +177,9 @@ function dog_exit_bounds(dog)
   dog.x>top or
   dog.y>top
  if done then
+  local make_cat=dog.character==0
   del(exit_dogs,dog)
-  enter_dog(dog.player)
+  enter_dog(dog.player,make_cat)
  end
 end
 
@@ -195,7 +204,7 @@ function draw_dog(dog)
  elseif dog.dx!=0 or dog.dy!=0 then
   sprite=1+(dog.anim%20)/10
  end
- spr(sprite+dog.player*16
+ spr(sprite+dog.character+dog.player*16
    ,dog.x,dog.y-dog.h
    ,1,1
    ,dog.direction==1)
