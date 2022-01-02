@@ -225,15 +225,16 @@ ball_radius=1
 balls={}
 
 fence_top=16*8-4
-fence_top_v=16*8-2
+fence_top_v=16*8
 fence_bottom=4
+fence_bottom_v=8
 
 function make_ball()
  ball={}
  ball.x=0
  ball.y=64
- ball.dx=8
- ball.dy=10
+ ball.dx=20
+ ball.dy=20
  ball.h=4
  ball.dh=0
  ball.over_fence=true
@@ -242,7 +243,7 @@ end
 
 function ball_over_fence(ball)
  return ball.x<fence_bottom or
-        ball.y<fence_bottom or
+        ball.y<fence_bottom_v or
         ball.x>fence_top or
         ball.y>fence_top_v
 end
@@ -253,7 +254,7 @@ function ball_x_collide(ball)
 end
 
 function ball_y_collide(ball)
- return ball.dy<0 and ball.y-ball_radius<fence_bottom
+ return ball.dy<0 and ball.y-ball_radius<fence_bottom_v
   or ball.dy>0 and ball.y+ball_radius>fence_top_v
 end
 
@@ -268,7 +269,7 @@ function update_balls()
   if (ball.over_fence and fence_now) height = 4
   if ball.h<height+ball_radius then
    ball.h=height+ball_radius
-   ball.dh*=-0.95
+   ball.dh*=-0.85
   end
   if not fence_now and ball.h<4 then
    if ball_x_collide(ball) then
