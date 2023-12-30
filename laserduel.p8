@@ -273,6 +273,7 @@ function explosion_vs_collider(exp,col)
 end
 
 function on_exp_hit_ufo(ufo,exp)
+	ufo.score-=1
 	destroy_ufo(ufo)
 end
 
@@ -303,7 +304,7 @@ function destroy_asteroid(ast, spark_index)
 		end
 	end
 	local total_area=ast_rad*ast_rad
-	local particles=flr(1.1*(total_area - consumed_area)) + flr(rnd(4))
+	local particles=flr(0.9*(total_area - consumed_area)) + flr(rnd(4))
 	local p_i=flr(rnd(#random_arg_vec2-particles))
 	local v_i=flr(rnd(#random_arg_vec2-particles))
 	for i=1,particles do
@@ -315,7 +316,22 @@ function destroy_asteroid(ast, spark_index)
 		vel:add(ast.vel)
 		make_asteroid_particle(pos,vel,1,90+rnd(1500))
 	end
+	
+	sfx(5)
+	
 	if (spark_index<1) return
+	
+	local r_sqrt=sqrt(ast_rad)
+	local puffs=rnd(ast_rad*6)
+	local p_i=flr(rnd(#random_arg_vec2-puffs))
+	for i=1,puffs do
+	 local dir=random_arg_vec2[p_i+i]
+	 local puffvel=dir:copy()
+	 puffvel:scale(0.4*r_sqrt)
+	 puffvel:add(ast.vel)
+		make_asteroid_particle(ast.pos,puffvel)
+	end
+	
 	local sparks=flr(0.22*total_area) + flr(rnd(2))
 	p_i=flr(rnd(#random_arg_vec2-sparks))
 	v_i=flr(rnd(#random_arg_vec2-sparks))
@@ -669,7 +685,7 @@ _vec2_api={
 			return a
 		end,
 	copy=function(a)
-			return make_vec(a.x,a.y)
+			return make_vec2(a.x,a.y)
 		end,
 	dot=function(a,b)
 			return a.x*b.x+a.y*b.y
@@ -1545,3 +1561,4 @@ __sfx__
 a20100000e752187122c722347521a72204712007021b7020b70207702057020270200702007020270201702007020070200702007023c7020070200702007020070200702007020070200702007020070200702
 ba0300002b0202b0401b0601307011070130701a0601b0601a050147500f7400d7400974006730027300b73006020030200101000000040500105000050000000000003050000500000001650000000005000650
 000100003806030050250301a030110503e0700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+c21a00000265101671006510064100631000000000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100000000000000000000000000000000000
