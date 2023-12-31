@@ -234,7 +234,6 @@ end
 
 function destroy_ufo(ufo)
 	despawn_ufo(ufo.index)
-	--note we pass ufo position. could cause issues if explosions moved
 	make_exp(ufo.pos,ufo.vel,ufo.index)
 	local radius=get_radius(ufo)
 	local particles=85
@@ -248,14 +247,6 @@ function destroy_ufo(ufo)
 	ufo_respawn_queue[ufo.index]=600
 end
 
-function on_ufo_hit(ufo,hit)
-	ufo.integrity-=(0.05*hit.angle)
-	if (ufo.integrity>0) return
- ufos[hit.index].score+=1
-	destroy_ufo(ufo)
-end
-
-local exp_impact_prop=0.5
 local exp_vs_col_str=0.325
 function explosion_vs_collider(exp,col)
 	local diff=get_cached_vec2(1):set(col.pos):sub(exp.pos)
@@ -264,21 +255,14 @@ function explosion_vs_collider(exp,col)
 	local col_rad=get_radius(col)
 	local rad_sum=exp_rad+col_rad
 	if dist_sq<=rad_sum*rad_sum then
-		local push=exp_vs_col_str*explode_strength(exp)
+		local strength=explode_strength(exp)
+		local push=exp_vs_col_str*strength
 		diff:scale(push/(sqrt(dist_sq)*col_rad*col_rad*col_rad))
 		col.vel:add(diff)
-		local hit_dist=exp_impact_prop*exp_rad+col_rad
-		if (col.on_exp and dist_sq<=hit_dist*hit_dist and 0.1>rnd(1)) col:on_exp(exp)
+		if col.on_exp then
+		 col:on_exp(exp_impact*strength)
+		end
 	end
-end
-
-function on_exp_hit_ufo(ufo,exp)
-	ufo.score-=1
-	destroy_ufo(ufo)
-end
-
-function on_exp_hit_asteroid(ast,exp)
-	destroy_asteroid(ast,-1)
 end
 
 function destroy_asteroid(ast, spark_index)
@@ -346,12 +330,6 @@ function destroy_asteroid(ast, spark_index)
 		if (i>=0.9*sparks) palette=spark_index
 		make_spark_particle(pos,vel,palette)
 	end
-end
-
-function on_asteroid_hit(ast,hit)
-	local kill_prob=0.45*hit.angle*hit.angle
-	if (kill_prob<(rnd(0.5)+rnd(0.5))) return
-	destroy_asteroid(ast, hit.index)
 end
 
 local _vec2_cache={}
@@ -588,8 +566,8 @@ explosions={}
 
 function make_exp(pos,vel,palette)
 	local expl={}
-	expl.pos=pos
-	expl.vel=vel
+	expl.pos=pos:copy()
+	expl.vel=vel:copy()
 	expl.radius=0
 	expl.max_radius=50
 	expl.strength=0.0025
@@ -909,6 +887,7 @@ function update_laser_hit(laser)
 	if (not laser.beam_active) return
 	local hit_object=hit.object
 	if (not hit_object or not hit_object.on_hit) return
+	hit.impact=laser_impact*hit.angle
 	hit_object:on_hit(hit)
 end
 
@@ -979,6 +958,7 @@ function register_ast(rad,spr_ind,spr_w)
 	asteroid.radius=rad
 	asteroid.sprite=spr_ind
 	asteroid.sprite_w=spr_w
+	asteroid.impact_mult=ast_impact_multiplier*sqrt(8/rad)
 	add(ast_prot_map,asteroid)
 end
 
@@ -1093,6 +1073,7 @@ function draw_asteroid(ast)
 	,attrs.sprite_w
 	,attrs.sprite_w)
 end
+
 -->8
 --palette & particles
 
@@ -1309,6 +1290,45 @@ function draw_particles()
 		end
 	end
 end
+
+-->8
+--damage
+
+function ufo_impact(ufo,impact)
+	ufo.integrity-=impact
+	if (ufo.integrity>0) return true
+	destroy_ufo(ufo)
+	return false
+end
+
+laser_impact=0.05
+exp_impact=0.0275
+ast_impact_multiplier=4.5
+
+function on_ufo_hit(ufo,hit)
+	if (ufo_impact(ufo,hit.impact)) return
+	ufos[hit.index].score+=1
+end
+
+function on_exp_hit_ufo(ufo,strength)
+	if (ufo_impact(ufo,strength)) return
+	ufo.score-=1
+end
+
+function ast_impact(ast,impact,laser_index)
+	local roll = rnd(0.25)+rnd(0.25) + rnd(0.25)+rnd(0.25)
+	if (impact < roll) return
+	destroy_asteroid(ast,laser_index)
+end
+
+function on_exp_hit_asteroid(ast,strength)
+	ast_impact(ast,ast.attributes.impact_mult*strength,-1)
+end
+
+function on_asteroid_hit(ast,hit)
+	ast_impact(ast,ast.attributes.impact_mult*hit.impact,hit.index)
+end
+
 __gfx__
 000000000667000005dd00000d66000000dd660000d6660000000666dd6600000060000000000000000000000000000000000000000000000000000000000000
 00000000dd8670005dd60000d5ddd6000ddddd600ddddd600000ddd5dddd600005d5000000000000000000000000000000000000000000000000000000000000
@@ -1561,4 +1581,4 @@ __sfx__
 a20100000e752187122c722347521a72204712007021b7020b70207702057020270200702007020270201702007020070200702007023c7020070200702007020070200702007020070200702007020070200702
 ba0300002b0202b0401b0601307011070130701a0601b0601a050147500f7400d7400974006730027300b73006020030200101000000040500105000050000000000003050000500000001650000000005000650
 000100003806030050250301a030110503e0700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-c21a00000265101671006510064100631000000000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100000000000000000000000000000000000
+c31b00000265101671006510064100631016200061100611006110060100601006010060100601006010060100601006010060100601006010060100601006010060100600006000060000600006000060000600
